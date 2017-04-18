@@ -62,7 +62,6 @@ type MOBILParam
 	#db::Float64 #lane bias #we follow the symmetric/USA lane change rule
 end #MOBILParam
 MOBILParam(;p::Float64=0.0,b_safe::Float64=1.0,a_thr::Float64=0.0) = MOBILParam(p,b_safe,a_thr)
-MOBILParam() = MOBILParam(0.0,1.0,0.0) #Default for local problem modeling
 ==(a::MOBILParam,b::MOBILParam) = (a.p==b.p) && (a.b_safe==b.b_safe) && (a.a_thr == b.a_thr)
 Base.hash(a::MOBILParam,h::UInt64=zero(UInt64)) = hash(a.p,hash(a.b_safe,hash(a.a_thr,h)))
 

@@ -152,7 +152,7 @@ iterator(actSpace::EgoActionSpace) = actSpace.actions
 dimensions(::EgoActionSpace) = 1
 
 #Sample random action
-Base.rand(rng::AbstractRNG, asp::EgoActionSpace) = asp.actions[Base.rand(rng, 1:Base.length(asp))]
+Base.rand(rng::AbstractRNG, asp::EgoActionSpace) = Base.rand(rng, 1:Base.length(asp))
 
 #Modified MOBIL parameters. Ignoring parts for ensuring smooth traffic flow. Self interested lane changes only.
 function isLaneChangeSafe(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysicalState, nextFollowingState::CarPhysicalState)

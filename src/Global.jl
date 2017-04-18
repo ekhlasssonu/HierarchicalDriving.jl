@@ -94,51 +94,6 @@ function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::Abstr
   return CarPhysicalState(false, sp)
 end
 
-#=
-      Sort the neighborhood with cars in each lane ordered in decreasing order of x.
-      Car may change lane as well leaving lanes empty
-=#
-function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1})
-  numLanes = length(neighborhood)
-  sorted = Array{Array{CarLocalISL0,1},1}(numLanes)
-
-  for ln in 1:numLanes
-    sorted[ln] = Array{CarLocalISL0,1}()
-  end
-  for ln in 1:numLanes
-    for carIS in neighborhood[ln]
-      carPhySt = carIS.physicalState
-      x = carPhySt.state[1]
-      y = carPhySt.state[2]
-
-      #Find the lane to which the car belongs
-      carLane = getLaneNo(carPhySt)
-      if length(sorted[carLane]) == 0
-        push!(sorted[carLane], carIS)
-      else
-        numCarsAhead = 0
-        while numCarsAhead < length(sorted[carLane])
-          otherCarIS = sorted[carLane][numCarsAhead+1]
-          otherCarPhySt = otherCarIS.physicalState
-          xp = otherCarPhySt.state[1]
-          if xp < x
-            break
-          end
-          numCarsAhead += 1
-        end
-        if numCarsAhead == length(sorted[carLane])
-          push!(sorted[carLane], carIS)
-        else
-          temp = splice!(sorted[carLane], numCarsAhead+1:length(sorted[carLane]))
-          push!(sorted[carLane], carIS)
-          append!(sorted[carLane],temp)
-        end
-      end
-
-    end
-  end
-  return sorted
-end
 
 #=
 
@@ -173,6 +128,12 @@ function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDi
   targetLane = 1
   while (targetLane < length(cumProbDist)) && (x <= cumProbDist[targetLane])
     targetLane += 1
+  end
+  if (targetLane > length(intentionDist))
+    println("THIS SHOULD NOT HAPPEN")
+    println("THIS SHOULD NOT HAPPEN")
+    println("THIS SHOULD NOT HAPPEN")
+    targetLane = length(intentionDist)
   end
   frame = frameList[Base.rand(1:length(frameList))]
   node = frame.policy.nodeSet[1]

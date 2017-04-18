@@ -4,12 +4,12 @@
 #import Random.rand
 
 #Modeling parameters
-NUM_INTENTIONS = 4 #Only 4 possible target lanes, movement is fixed based on
+NUM_INTENTIONS_LC = 4 #Only 4 possible target lanes, movement is fixed based on
 
 
 using POMDPs
 
-function getLaneNo(phySt::CarPhysicalState)
+function getLaneNo_LCR(phySt::CarPhysicalState)
   if phySt.state[2] < -LANE_WIDTH
     return 1
   elseif phySt.state[2] < 0
@@ -21,9 +21,54 @@ function getLaneNo(phySt::CarPhysicalState)
   end
 end
 
+#=
+      Sort the neighborhood with cars in each lane ordered in decreasing order of x.
+      Car may change lane as well leaving lanes empty
+=#
+function sortNeighborhood_LCR(neighborhood::Array{Array{CarLocalISL0,1},1})
+  numLanes = length(neighborhood)
+  sorted = Array{Array{CarLocalISL0,1},1}(numLanes)
+
+  for ln in 1:numLanes
+    sorted[ln] = Array{CarLocalISL0,1}()
+  end
+  for ln in 1:numLanes
+    for carIS in neighborhood[ln]
+      carPhySt = carIS.physicalState
+      x = carPhySt.state[1]
+      y = carPhySt.state[2]
+
+      #Find the lane to which the car belongs
+      carLane = getLaneNo_LCR(carPhySt)
+      if length(sorted[carLane]) == 0
+        push!(sorted[carLane], carIS)
+      else
+        numCarsAhead = 0
+        while numCarsAhead < length(sorted[carLane])
+          otherCarIS = sorted[carLane][numCarsAhead+1]
+          otherCarPhySt = otherCarIS.physicalState
+          xp = otherCarPhySt.state[1]
+          if xp < x
+            break
+          end
+          numCarsAhead += 1
+        end
+        if numCarsAhead == length(sorted[carLane])
+          push!(sorted[carLane], carIS)
+        else
+          temp = splice!(sorted[carLane], numCarsAhead+1:length(sorted[carLane]))
+          push!(sorted[carLane], carIS)
+          append!(sorted[carLane],temp)
+        end
+      end
+
+    end
+  end
+  return sorted
+end
 
 #Get car action given global state and model
-function getOtherCarsAction(globalISL1::GlobalStateL1, rng::AbstractRNG)
+function getOtherCarsAction_LCR(globalISL1::GlobalStateL1, rng::AbstractRNG)
   #=
   Change next part for different maneuvers
   =#
@@ -32,7 +77,7 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, rng::AbstractRNG)
   End of variable part
   =#
   egoState = globalISL1.ego
-  egoLane = getLaneNo(egoState)
+  egoLane = getLaneNo_LCR(egoState)
   numLanes = length(globalISL1.neighborhood)
   actions = Array{Array{CarAction,1},1}(numLanes)
   for ln in 1:numLanes
@@ -103,19 +148,19 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, rng::AbstractRNG)
   return actions
 end
 
-function updateNeighborState(globalISL1::GlobalStateL1, rng::AbstractRNG)
+function updateNeighborState_LCR(globalISL1::GlobalStateL1, rng::AbstractRNG)
   #Maneuver specific
   laneCenters = [-3*LANE_WIDTH/2, -LANE_WIDTH/2, LANE_WIDTH/2, 3*LANE_WIDTH/2]
 
   #Maneuver independent
-  egoLane = getLaneNo(globalISL1.ego)
+  egoLane = getLaneNo_LCR(globalISL1.ego)
   numLanes = length(globalISL1.neighborhood)
   updatedNeighborhood = Array{Array{CarLocalISL0,1},1}(numLanes)
 
     nxtFlPhySt = Nullable{CarPhysicalState}()
     nxtLdPhySt = Nullable{CarPhysicalState}()
 
-  actions = getOtherCarsAction(globalISL1, rng) #This gives all cars' (sampled) action in the order they are on neighborhood
+  actions = getOtherCarsAction_LCR(globalISL1, rng) #This gives all cars' (sampled) action in the order they are on neighborhood
 
   for ln in 1:numLanes #For every lane
     numCars = length(globalISL1.neighborhood[ln])
@@ -216,7 +261,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, rng::AbstractRNG)
     end
   end
 
-  return sortNeighborhood(updatedNeighborhood)
+  return sortNeighborhood_LCR(updatedNeighborhood)
 
 end
 
@@ -243,7 +288,7 @@ discount(p::ChangeLaneRightPOMDP) = p.discount_factor
 isterminal(::ChangeLaneRightPOMDP, act::Int64) = act == length(EgoActionSpace().actions)
 #Needs to be updated. No need for absent
 function isterminal(p::ChangeLaneRightPOMDP, st::GlobalStateL1)
-  st.egoState.absent ? true : false
+  st.ego.absent ? true : false
 end
 #From actions
 n_actions(p::ChangeLaneRightPOMDP) = length(actions(p))
@@ -277,9 +322,9 @@ end
 function rand(rng::AbstractRNG, d::ChangeLaneRightNormalStateDist, frameList::Array{CarFrameL0,1}=getFrameList())
   egoState = randCarPhysicalState(rng, d.egoDist, true)
 
-  neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS)
+  neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS_LC)
   #TODO: There has to be a better way
-  for i in 1:NUM_INTENTIONS
+  for i in 1:NUM_INTENTIONS_LC
     neighborhood[i] = Array{CarLocalISL0,1}()
   end
 
@@ -363,7 +408,7 @@ function generate_s(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Ab
   end
 
   egoState = propagateCar(s.ego, act, TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
-  neighborhood = updateNeighborState(s, rng)
+  neighborhood = updateNeighborState_LCR(s, rng)
 
   sp = GlobalStateL1(egoState, neighborhood)
 
@@ -394,7 +439,7 @@ function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Abstra
   if act.ddot_x <= -4.0
     reward += p.hardbrakingCost
   end
-  nbrActions = getOtherCarsAction(s, rng) #Randomness is iffy but IDM part is constant, so no problem there
+  nbrActions = getOtherCarsAction_LCR(s, rng) #Randomness is iffy but IDM part is constant, so no problem there
   discomfort = false
   for ln in 1:length(nbrActions)
     for carAct in nbrActions[ln]

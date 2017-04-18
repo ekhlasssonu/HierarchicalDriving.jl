@@ -60,10 +60,14 @@ Base.copy(s1::EgoObservation) = EgoObservation(s1.ego, s1.neighborhood)
 
 =#
 #=
-     Motion model implemented here
-     Find the next state of a car given the current physical state and
-     action = <\ddot{x}, \dot{y}>
-
+function getLaneNo(phySt::CarPhysicalState, laneCenters::Array{Float64,1})
+  for ln in 1:length(laneCenters)-1
+    if phySt.state[2] < laneCenters[ln]+LANE_WIDTH/2.0
+      return ln
+    end
+  end
+  return length(laneCenters)
+end
 =#
 function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0,0,0)))
   # If car is absent or car velocity is negative or actions is terminal

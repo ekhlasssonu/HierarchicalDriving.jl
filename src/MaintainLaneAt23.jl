@@ -10,14 +10,12 @@ NUM_INTENTIONS_ML = 3 #Only 4 possible target lanes, movement is fixed based on
 using POMDPs
 
 function getLaneNo_M23(phySt::CarPhysicalState)
-  if phySt.state[2] < -LANE_WIDTH
+  if phySt.state[2] < -LANE_WIDTH/2
     return 1
-  elseif phySt.state[2] < 0
+  elseif phySt.state[2] < LANE_WIDTH/2
     return 2
-  elseif phySt.state[2] < LANE_WIDTH
-    return 3
   else
-    return 4
+    return 3
   end
 end
 

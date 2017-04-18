@@ -6,9 +6,9 @@ importall POMDPs, MCVI
 
 export ChangeLaneRightPOMDP,
         ChangeLaneLeftPOMDP,
-        MaintainLaneAt23POMDP,
-        MaintainLaneAt25POMDP,
-        MaintainLaneAt27POMDP
+        MaintainAt23POMDP,
+        MaintainAt25POMDP,
+        MaintainAt27POMDP
 
 include("FSM.jl")
 include("DrivingParams.jl")

@@ -20,20 +20,12 @@ for i in 1:100
   simulate(hr, p1, policy)
 end
 
-println("M23")
-p2 = MaintainAt23POMDP()
-for i in 1:100
-  println(i)
-  policy = RandomPolicy(p2)
-  hr = HistoryRecorder(max_steps = 20)
-  simulate(hr, p2, policy)
-end
 
 println("M25")
 p3 = MaintainAt25POMDP()
 for i in 1:100
   println(i)
-  policy = RandomPolicy(p2)
+  policy = RandomPolicy(p3)
   hr = HistoryRecorder(max_steps = 20)
   simulate(hr, p3, policy)
 end
@@ -45,4 +37,13 @@ for i in 1:100
   policy = RandomPolicy(p4)
   hr = HistoryRecorder(max_steps = 20)
   simulate(hr, p4, policy)
+end
+
+println("M23")
+p2 = MaintainAt23POMDP()
+for i in 1:100
+  println(i)
+  policy = RandomPolicy(p2)
+  hr = HistoryRecorder(max_steps = 20)
+  simulate(hr, p2, policy)
 end

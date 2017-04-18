@@ -83,6 +83,7 @@ function getOtherCarsAction_M25(globalISL1::GlobalStateL1, rng::AbstractRNG)
   for ln in 1:numLanes
     actions[ln] = Array{CarAction,1}()
     carNo = 1
+    ldCarIS = Nullable{CarLocalISL0}()
     for carIS in globalISL1.neighborhood[ln]
       carPhySt = carIS.physicalState
       carModel = carIS.modelL0
@@ -92,20 +93,20 @@ function getOtherCarsAction_M25(globalISL1::GlobalStateL1, rng::AbstractRNG)
       g = AVG_GAP
       #Longitudinal acceleration
       if (ln != egoLane)
-        if carNo != 1
-          dxdot = globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[3] - xdot
-          g = globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[1] - x
+        if !isnull(ldCarIS)
+          dxdot = ldCarIS.physicalState.state[3] - xdot
+          g = ldCarIS.physicalState.state[1] - x
         end
       else
-        if (carNo == 1)  && (egoState.state[1] > x) #car is the first in the lane in neighborhood but ego vehicle is ahead of it
+        if (isnull(ldCarIS))  && (egoState.state[1] > x) #car is the first in the lane in neighborhood but ego vehicle is ahead of it
           g = egoState.state[1] - x
           dxdot = egoState.state[3] - xdot
-        elseif (carNo != 1) && (egoState.state[1] > x) && (globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[1] > egoState.state[1])
+        elseif (!isnull(ldCarIS)) && (egoState.state[1] > x) && (ldCarIS.physicalState.state[1] > egoState.state[1])
           g = egoState.state[1] - x
           dxdot = egoState.state[3] - xdot
-        elseif (carNo != 1) && (egoState.state[1] > globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[1])
-          g = globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[1] - x
-          dxdot = globalISL1.neighborhood[numLanes][carNo-1].physicalState.state[3] - xdot
+        elseif (!isnull(ldCarIS)) && (egoState.state[1] > ldCarIS.physicalState.state[1])
+          g = ldCarIS.physicalState.state[1] - x
+          dxdot = ldCarIS.physicalState.state[3] - xdot
         end
       end
 
@@ -142,6 +143,7 @@ function getOtherCarsAction_M25(globalISL1::GlobalStateL1, rng::AbstractRNG)
       push!(actions[ln], CarAction(ddotx, ydot))
 
       carNo += 1
+      ldCarIS = carIS
     end
   end
 

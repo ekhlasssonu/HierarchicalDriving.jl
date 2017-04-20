@@ -286,7 +286,7 @@ discount(p::MaintainAt25POMDP) = p.discount_factor
 isterminal(::MaintainAt25POMDP, act::Int64) = act == length(EgoActionSpace().actions)
 #Needs to be updated. No need for absent
 function isterminal(p::MaintainAt25POMDP, st::GlobalStateL1)
-  st.ego.absent ? true : false
+  st.terminal ? true : false
 end
 #From actions
 n_actions(p::MaintainAt25POMDP) = length(actions(p))
@@ -314,7 +314,7 @@ function initial_state_distribution(p::MaintainAt25POMDP)
 end
 
 function rand(rng::AbstractRNG, d::MaintainLaneAt25NormalStateDist, frameList::Array{CarFrameL0,1}=getFrameList())
-  egoState = randCarPhysicalState(rng, d.egoDist, true)
+  egoState = randCarPhysicalState(rng, d.egoDist)
 
   neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS_ML)
   #TODO: There has to be a better way
@@ -322,28 +322,36 @@ function rand(rng::AbstractRNG, d::MaintainLaneAt25NormalStateDist, frameList::A
     neighborhood[i] = Array{CarLocalISL0,1}()
   end
 
-  leftLeadingState = randCarLocalISL0(rng, d.leftLeadingDist, [0.6, 0.3, 0.1], frameList)
-  #Assert that it is indeed ahead of ego vehicle
-  if leftLeadingState.physicalState.state[1] < egoState.state[1]
-    leftLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, leftLeadingState.physicalState.state[2], leftLeadingState.physicalState.state[3])
+  rnd = rand(rng)
+  if (rnd > 0.25)
+    leftLeadingState = randCarLocalISL0(rng, d.leftLeadingDist, [0.6, 0.3, 0.1], frameList)
+    #Assert that it is indeed ahead of ego vehicle
+    if leftLeadingState.physicalState.state[1] < egoState.state[1]
+      leftLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, leftLeadingState.physicalState.state[2], leftLeadingState.physicalState.state[3])
+    end
+    push!(neighborhood[1], leftLeadingState)
   end
-  push!(neighborhood[1], leftLeadingState)
 
-
-  currLeadingState = randCarLocalISL0(rng, d.currLeadingDist, [0.2, 0.6, 0.2], frameList)
-  #Assert that it is indeed ahead of ego vehicle
-  if currLeadingState.physicalState.state[1] < egoState.state[1]
-    currLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, currLeadingState.physicalState.state[2], currLeadingState.physicalState.state[3])
+  rnd = rand(rng)
+  if (rnd > 0.25)
+    currLeadingState = randCarLocalISL0(rng, d.currLeadingDist, [0.2, 0.6, 0.2], frameList)
+    #Assert that it is indeed ahead of ego vehicle
+    if currLeadingState.physicalState.state[1] < egoState.state[1]
+      currLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, currLeadingState.physicalState.state[2], currLeadingState.physicalState.state[3])
+    end
+    push!(neighborhood[2], currLeadingState)
   end
-  push!(neighborhood[2], currLeadingState)
 
-  rightLeadingState = randCarLocalISL0(rng, d.rightLeadingDist, [0.1, 0.3, 0.6], frameList)
-  #Assert that it is indeed ahead of ego vehicle
-  if rightLeadingState.physicalState.state[1] < egoState.state[1]
-    rightLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, rightLeadingState.physicalState.state[2], rightLeadingState.physicalState.state[3])
+  rnd = rand(rng)
+  if (rnd > 0.25)
+    rightLeadingState = randCarLocalISL0(rng, d.rightLeadingDist, [0.1, 0.3, 0.6], frameList)
+    #Assert that it is indeed ahead of ego vehicle
+    if rightLeadingState.physicalState.state[1] < egoState.state[1]
+      rightLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, rightLeadingState.physicalState.state[2], rightLeadingState.physicalState.state[3])
+    end
+    push!(neighborhood[3], rightLeadingState)
   end
-  push!(neighborhood[3], rightLeadingState)
-  return(GlobalStateL1(egoState, neighborhood))
+  return(GlobalStateL1(false, egoState, neighborhood))
 end
 
 #Generate observation
@@ -368,7 +376,7 @@ function generate_o(p::MaintainAt25POMDP, s::Union{GlobalStateL1,Void}, a::Union
       y += noise_y
       xdot += noise_xdot
 
-      carObs = CarPhysicalState(phySt.absent, (x,y,xdot))
+      carObs = CarPhysicalState((x,y,xdot))
       push!(nbrObs[ln], carObs)
     end
   end
@@ -380,14 +388,14 @@ end
 function generate_s(p::MaintainAt25POMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if s.ego.absent
+  if s.terminal
     return s
   end
   if a == length(actionSet.actions)
-    return GlobalStateL1(CarPhysicalState(true, s.ego.state), s.neighborhood)
+    return GlobalStateL1(CarPhysicalState(s.ego.state), s.neighborhood)
   end
   if checkForCollision(s)
-    return GlobalStateL1(CarPhysicalState(true, s.ego.state), s.neighborhood)
+    return GlobalStateL1(CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
   egoState = propagateCar(s.ego, act, TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
@@ -402,7 +410,7 @@ end
 function reward(p::MaintainAt25POMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if (s.ego.absent )
+  if (s.terminal )
     return 0.0
   end
   if a == length(actionSet.actions)
@@ -410,36 +418,36 @@ function reward(p::MaintainAt25POMDP, s::GlobalStateL1, a::Int64, rng::AbstractR
   end
 
   reward = 0.0
-  if !(s.ego.absent || a == length(actionSet.actions))
-    egoSt = s.ego
-    nbrhood = s.neighborhood
-    #TODO: More stuff here
-    if checkForCollision(s)
-      return p.collisionCost
-    end
-    #if abs(egoSt.state[2] - p.target_y) < 0.5
-      reward += (p.goalReward * abs(egoSt.state[2] - p.target_y))
-    #end
-    if act.ddot_x <= -4.0
-      reward += p.hardbrakingCost
-    end
-    nbrActions = getOtherCarsAction_M25(s, rng) #Randomness is iffy but IDM part is constant, so no problem there
-    discomfort = false
-    for ln in 1:length(nbrActions)
-      for carAct in nbrActions[ln]
-        if carAct.ddot_x <= -4.0
-          reward += p.discomfortCost
-          discomfort = true
-          break
-        end
-      end
-      if discomfort
+
+  egoSt = s.ego
+  nbrhood = s.neighborhood
+  #TODO: More stuff here
+  if checkForCollision(s)
+    return p.collisionCost
+  end
+  #if abs(egoSt.state[2] - p.target_y) < 0.5
+    reward += (p.goalReward * abs(egoSt.state[2] - p.target_y))
+  #end
+  if act.ddot_x <= -4.0
+    reward += p.hardbrakingCost
+  end
+  nbrActions = getOtherCarsAction_M25(s, rng) #Randomness is iffy but IDM part is constant, so no problem there
+  discomfort = false
+  for ln in 1:length(nbrActions)
+    for carAct in nbrActions[ln]
+      if carAct.ddot_x <= -4.0
+        reward += p.discomfortCost
+        discomfort = true
         break
       end
     end
-    xdot = egoSt.state[3]
-    reward += (abs(xdot - p.target_vel) * p.velocityCost)
+    if discomfort
+      break
+    end
   end
+  xdot = egoSt.state[3]
+  reward += (abs(xdot - p.target_vel) * p.velocityCost)
+
   return reward
 end
 

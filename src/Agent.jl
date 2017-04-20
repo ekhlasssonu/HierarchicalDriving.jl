@@ -19,15 +19,16 @@ Base.copy(a1::CarAction) = CarAction(a1.ddot_x, a1.dot_y)
 
 
 type CarPhysicalState <: State
-  absent::Bool
+  #absent::Bool
   state::NTuple{3,Float64} #<x, y, \dot{x} >.
 end
-CarPhysicalState(st::CarPhysicalState) = CarPhysicalState(st.absent, st.state)
-==(s1::CarPhysicalState, s2::CarPhysicalState) = (s1.absent == s2.absent) && (s1.state == s2.state)
-Base.hash(s::CarPhysicalState, h::UInt64=zero(UInt64)) = hash(s.absent, hash(s.state,h))
-Base.copy(s::CarPhysicalState) = CarPhysicalState(s.absent, s.state)
+#CarPhysicalState(state::NTuple{3,Float64}) = CarPhysicalState(false, state)
+CarPhysicalState(st::CarPhysicalState) = CarPhysicalState(st.state)
+==(s1::CarPhysicalState, s2::CarPhysicalState) = (s1.state == s2.state)
+Base.hash(s::CarPhysicalState, h::UInt64=zero(UInt64)) = hash(s.state,h)
+Base.copy(s::CarPhysicalState) = CarPhysicalState(s.state)
 
-collision(s1::CarPhysicalState, s2::CarPhysicalState) = (!s1.absent) && (!s2.absent) && (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH/2) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH/2)
+collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH/2) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH/2)
 
 
 type CarFrameL0 <: Frame
@@ -37,6 +38,7 @@ type CarFrameL0 <: Frame
   carLength::Float64
   carWidth::Float64
 end
+CarFrameL0(long::IDMParam, lat::MOBILParam, pol::FSM{Int64, Float64, String}) = CarFrameL0(long, lat, pol, CAR_LENGTH, CAR_WIDTH)
 ==(f1::CarFrameL0, f2::CarFrameL0) = (f1.longitudinal == f2.longitudinal) && (f1.lateral == f2.lateral) && (f1.policy == f2.policy) && (f1.carLength == f2.carLength) && (f1.carWidth == f2.carWidth)
 Base.hash(f::CarFrameL0, h::UInt64=zero(UInt64)) = hash(f.longitudinal, hash(f.lateral, hash(f.policy, hash(f.carLength, hash(f.carWidth, h)))))
 Base.copy(f::CarFrameL0) = CarFrameL0(f.longitudinal, f.lateral, f.policy, f.carLength, f.carWidth)
@@ -58,8 +60,8 @@ end
 Base.hash(is::CarLocalISL0, h::UInt64=zero(UInt64)) = hash(physicalState, hash(modelL0, h))
 Base.copy(is::CarLocalISL0) = CarLocalISL0(is.physicalState, is.modelL0)
 
-collision(s1::CarPhysicalState, is2::CarLocalISL0) = (!s1.absent) && (!is2.physicalState.absent) && (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.modelL0.frame.carWidth)/2)
-collision(is1::CarLocalISL0, is2::CarLocalISL0) = (!is1.physicalState.absent) && (!is2.physicalState.absent) && (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.modelL0.frame.carLength + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (is1.modelL0.frame.carWidth + is2.modelL0.frame.carWidth)/2)
+collision(s1::CarPhysicalState, is2::CarLocalISL0) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.modelL0.frame.carWidth)/2)
+collision(is1::CarLocalISL0, is2::CarLocalISL0) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.modelL0.frame.carLength + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (is1.modelL0.frame.carWidth + is2.modelL0.frame.carWidth)/2)
 
 #ddot_x is determined by IDM, Only for dot_y
 function createFSM()
@@ -148,7 +150,7 @@ end
 EgoActionSpace() = EgoActionSpace([CarAction(-2.0,-2.0), CarAction(-2.0,0.0), CarAction(-2.0,2.0), CarAction(0.0,-2.0), CarAction(0.0,0.0), CarAction(0.0,2.0), CarAction(2.0,-2.0), CarAction(2.0,0.0), CarAction(2.0,2.0), CarAction(-6.0,0.0), CarAction(Inf,Inf)])
 
 Base.length(asp::EgoActionSpace) = length(asp.actions)
-iterator(actSpace::EgoActionSpace) = actSpace.actions
+iterator(actSpace::EgoActionSpace) = 1:length(actSpace.actions)
 dimensions(::EgoActionSpace) = 1
 
 #Sample random action

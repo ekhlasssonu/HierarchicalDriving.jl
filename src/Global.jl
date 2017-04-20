@@ -14,7 +14,7 @@ TIME_STEP = 0.2
 
 #Sampling initial state distributions
 #Origin (x -> start location of ego vehicle), (y -> dividing line), (\dot(x) -> 25 mps)
-#A neighboring vehicle can be absent (too far away) with probability 0.15
+#A neighboring vehicle can be absent (too far away) with probability 0.25
 #Velocities vary according to normal distribution with std. dev. of 2m/s
 
 type NormalDist
@@ -36,12 +36,14 @@ end
 
 #State of world. Should work for upper level as well.
 type GlobalStateL1
+  terminal::Bool
   ego::CarPhysicalState
   neighborhood::Array{Array{CarLocalISL0,1},1}  #In order  of lane no. and x position
 end
-==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
-Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.ego, hash(s1.neighborhood, h))
-Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.ego, s1.neighborhood)
+GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1}) = GlobalStateL1(false, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1})
+==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.terminal == s2.terminal) && (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
+Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.terminal, hash(s1.ego, hash(s1.neighborhood, h)))
+Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.terminal, s1.ego, s1.neighborhood)
 
 
 type EgoObservation
@@ -59,7 +61,7 @@ Base.copy(s1::EgoObservation) = EgoObservation(s1.ego, s1.neighborhood)
      action = <\ddot{x}, \dot{y}>
 
 =#
-#=
+
 function getLaneNo(phySt::CarPhysicalState, laneCenters::Array{Float64,1})
   for ln in 1:length(laneCenters)-1
     if phySt.state[2] < laneCenters[ln]+LANE_WIDTH/2.0
@@ -68,12 +70,12 @@ function getLaneNo(phySt::CarPhysicalState, laneCenters::Array{Float64,1})
   end
   return length(laneCenters)
 end
-=#
+
 function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0,0,0)))
   # If car is absent or car velocity is negative or actions is terminal
-  if(s.absent || s.state[3] < 0.0) || (a.ddot_x == Inf) || (a.ddot_x == -Inf) || (a.dot_y == Inf) || (a.dot_y == -Inf)
+  #=if(s.absent || s.state[3] < 0.0) || (a.ddot_x == Inf) || (a.ddot_x == -Inf) || (a.dot_y == Inf) || (a.dot_y == -Inf)
     return s
-  end
+  end=#
   x = s.state[1]
   y = s.state[2]
   xdot = s.state[3]
@@ -95,7 +97,7 @@ function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::Abstr
   end #Car doesn't move in reverse direction
   sp = (x,y,xdot)
 
-  return CarPhysicalState(false, sp)
+  return CarPhysicalState(sp)
 end
 
 
@@ -104,12 +106,7 @@ end
 Generate state
 
 =#
-function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist},  ego::Bool = false)
-
-  #phySt = Nullable{CarPhysicalState}()
-  #ego vehicle can't be absent. Otherwise absent with probability 0.25, no reason for 0.25
-  absent = !ego && (Base.rand(rng) < 0.25 ? true : false)
-
+function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist})
   x = d[1].mean + randn(rng) * d[1].std
   y = d[2].mean
   y_noise = randn(rng) * d[2].std
@@ -122,11 +119,11 @@ function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist},  ego::B
 
   xdot += xdot_noise
 
-  return(CarPhysicalState(absent, (x,y,xdot)))
+  return (CarPhysicalState((x,y,xdot)))
 end
 
 function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDist::Array{Float64,1}, frameList::Array{CarFrameL0,1})
-  phySt = randCarPhysicalState(rng, d, false)
+  phySt = randCarPhysicalState(rng, d)
   cumProbDist = cumsum(intentionDist)
   x = Base.rand(rng)
   targetLane = 1
@@ -148,9 +145,9 @@ end
 
 function checkForCollision(gblISL1::GlobalStateL1)
   egoState = gblISL1.ego
-  if egoState.absent
+  #=if egoState.absent
     return true
-  end
+  end=#
   nbrhood = gblISL1.neighborhood
   numLanes = length(nbrhood)
   for ln in 1:numLanes

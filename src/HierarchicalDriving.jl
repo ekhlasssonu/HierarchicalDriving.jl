@@ -5,7 +5,11 @@ import Base: ==, +, *, -, copy, Random, hash
 importall POMDPs, MCVI
 
 export ChangeLaneRightPOMDP,
+        ChangeLaneRightLowerBound,
+        ChangeLaneRightUpperBound,
         ChangeLaneLeftPOMDP,
+        ChangeLaneLeftLowerBound,
+        ChangeLaneLeftUpperBound,
         MaintainAt23POMDP,
         MaintainAt25POMDP,
         MaintainAt27POMDP

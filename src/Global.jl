@@ -3,7 +3,7 @@
 #Noise parameters
 OBS_NOISE_X = 0.1
 OBS_NOISE_Y = 0.01
-OBS_NOISE_XDOT = 1
+OBS_NOISE_XDOT = 1.0
 
 TRN_NOISE_X = 0.1
 TRN_NOISE_Y = 0.0
@@ -108,15 +108,15 @@ Generate state
 =#
 function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist})
   x = d[1].mean + randn(rng) * d[1].std
+
   y = d[2].mean
   y_noise = randn(rng) * d[2].std
-
   y_noise >  (LANE_WIDTH/2.0) ? (y_noise = (LANE_WIDTH/2.0)) : (y_noise < -LANE_WIDTH/2.0) ? (y_noise = -LANE_WIDTH/2.0) : nothing
+  y += y_noise
 
   xdot = d[3].mean
   xdot_noise = randn(rng) * d[3].std
   xdot_noise > 2 * VEL_STD_DEV ? xdot_noise = 2 * VEL_STD_DEV : (xdot_noise < - 2 * VEL_STD_DEV ? xdot_noise = -2 * VEL_STD_DEV : nothing)
-
   xdot += xdot_noise
 
   return (CarPhysicalState((x,y,xdot)))
@@ -158,4 +158,8 @@ function checkForCollision(gblISL1::GlobalStateL1)
     end
   end
   return false
+end
+
+function gauss(x::Float64, sigma::Float64)
+  return 1 / sqrt(2*pi) / sigma * exp(-1*x^2/(2*sigma^2))
 end

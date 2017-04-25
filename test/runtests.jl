@@ -11,8 +11,8 @@ using POMDPModels # for LightDark1d
 
 # write your own tests here
 #@test 1 == 2
-include("run_random.jl")
+#include("run_random.jl")
 
-#include("runMCVI.jl")
+include("runMCVI.jl")
 
-#@test test_solve_right()
+@test test_solve_right()

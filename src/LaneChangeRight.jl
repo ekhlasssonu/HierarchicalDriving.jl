@@ -312,16 +312,19 @@ end
 Base.eltype(::ChangeLaneRightNormalStateDist) = GlobalStateL1
 
 function initial_state_distribution(p::ChangeLaneRightPOMDP)
+  println("Begin initial_state_distribution")
   egoDist = NTuple{3,NormalDist}((NormalDist(0.0,0.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   lLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(- 3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   cLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP,10.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   rLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   rFDist  = NTuple{3,NormalDist}((NormalDist(-AVG_GAP/2.0,10.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   fRNDist = NTuple{3,NormalDist}((NormalDist(0.0,10.0), NormalDist(3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+  println("End initial_state_distribution")
   return(ChangeLaneRightNormalStateDist(egoDist, lLDist, cLDist, rLDist, rFDist, fRNDist))
 end
 
 function rand(rng::AbstractRNG, d::ChangeLaneRightNormalStateDist, frameList::Array{CarFrameL0,1}=getFrameList())
+  println("Begin rand")
   egoState = randCarPhysicalState(rng, d.egoDist)
 
   neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS_LC)
@@ -385,13 +388,14 @@ function rand(rng::AbstractRNG, d::ChangeLaneRightNormalStateDist, frameList::Ar
   #else
     #println("rnd = ", rnd, " skipping farRightClosestState")
   end
-
+  println("End rand")
   return (GlobalStateL1(false, egoState, neighborhood))
 end
 
 
 #Generate observation
 function generate_o(p::ChangeLaneRightPOMDP, s::Union{GlobalStateL1,Void}, a::Union{Int64,Void}, sp::GlobalStateL1, rng::AbstractRNG)
+  println("Begin generate_o")
   numLanes = length(sp.neighborhood)
   nbrObs = Array{Array{CarPhysicalState,1},1}(numLanes)
 
@@ -416,21 +420,25 @@ function generate_o(p::ChangeLaneRightPOMDP, s::Union{GlobalStateL1,Void}, a::Un
       push!(nbrObs[ln], carObs)
     end
   end
-
+  println("End generate_o")
   return EgoObservation(egoPos, nbrObs)
 end
 
 #Generate next state
 function generate_s(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  println("Begin generate_s")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if s.terminal
+    println("End generate_s")
     return s
   end
   if a == length(actionSet.actions)
+    println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
   if checkForCollision(s)
+    println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
@@ -438,18 +446,21 @@ function generate_s(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Ab
   neighborhood = updateNeighborState_LCR(s, rng)
 
   sp = GlobalStateL1(false, egoState, neighborhood)
-
+  println("End generate_s")
   return sp
 end
 
 #Generate reward
 function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if (s.terminal )
+    println("End reward")
     return 0.0
   end
   if a == length(actionSet.actions)
+    println("End reward")
     return p.collisionCost   #Just giving it the minimum value. Not sure how MCVI treats the value
   end
 
@@ -458,6 +469,7 @@ function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Abstra
   nbrhood = s.neighborhood
   #TODO: More stuff here
   if checkForCollision(s)
+    println("End reward")
     return p.collisionCost
   end
   #if abs(egoSt.state[2] - p.target_y) < 0.5
@@ -482,21 +494,25 @@ function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Abstra
   end
   xdot = egoSt.state[3]
   reward += (abs(xdot - p.target_vel) * p.velocityCost)
+  println("End reward")
   return reward
 end
 
 #TODO: Needs to be refined
 function generate_sor(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  println("Begin generate_sor")
   sp = generate_s(p, s, a, rng)
   o = generate_o(p, nothing, nothing, sp, rng)
 
   r = reward(p,s,a,rng)
-
+  println("End generate_sor")
   return sp, o, r
 end
 
 function initial_state(p::ChangeLaneRightPOMDP, rng::AbstractRNG)
+  println("Begin initial_state")
   isd = initial_state_distribution(p)
+  println("End initial_state")
   return rand(rng, isd)
 end
 

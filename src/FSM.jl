@@ -24,6 +24,6 @@ type FSM{N,A,E}
   #Map node, edge, node to transition probability
   transitionProb::Dict{Tuple{FSM_Node{N}, FSM_Edge{E}, FSM_Node{N}}, Float64}
 end
-=={N,A,E}(a::FSM{N,A,E}, b::FSM{N,A,E}) = (a.nodeSet == b.nodeSet) && (a.nodeLabel == b.nodeLabel) && (a.actionProb == b.actionProb) && (a.transitionProb == b.transitionProb)
-Base.hash{N,A,E}(a::FSM{N,A,E}, h::UInt64=zero(UInt64)) = hash(a.nodeSet, hash(a.edgeLabels, hash(actionProb, hash(transitionProb,h))))
+=={N,A,E}(a::FSM{N,A,E}, b::FSM{N,A,E}) = (a.nodeSet == b.nodeSet) && (a.edgeLabels == b.edgeLabels) && (a.actionProb == b.actionProb) && (a.transitionProb == b.transitionProb)
+Base.hash{N,A,E}(a::FSM{N,A,E}, h::UInt64=zero(UInt64)) = hash(a.nodeSet, hash(a.edgeLabels, hash(a.actionProb, hash(a.transitionProb,h))))
 Base.copy{N,A,E}(a::FSM{N,A,E}) = FSM{N,A,E}(a.nodeSet, a.edgeLabels, a.actionProb, a.transitionProb)

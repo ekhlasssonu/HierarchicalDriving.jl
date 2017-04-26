@@ -543,3 +543,5 @@ function pdf(s::GlobalStateL1, o::EgoObservation)
   end
   return prob
 end
+
+obs_weight(::POMDP, s::GlobalStateL1, o::EgoObservation) = pdf(s, o)

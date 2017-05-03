@@ -11,7 +11,7 @@ for i in 1:100
   simulate(hr, p, policy)
 end
 println()
-
+#=
 println("Left")
 p1 = ChangeLaneLeftPOMDP()
 for i in 1:100
@@ -49,5 +49,15 @@ for i in 1:100
   policy = RandomPolicy(p2)
   hr = HistoryRecorder(max_steps = 20)
   simulate(hr, p2, policy)
+end
+println()
+=#
+println("Generic Low Level")
+p5 = LowLevelMDP()
+for i in 1:100
+  print("\r$i")
+  policy = RandomPolicy(p5)
+  hr = HistoryRecorder(max_steps = 20)
+  simulate(hr, p5, policy)
 end
 println()

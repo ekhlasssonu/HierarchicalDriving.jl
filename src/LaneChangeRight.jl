@@ -82,7 +82,6 @@ function getOtherCarsAction_LCR(globalISL1::GlobalStateL1, rng::AbstractRNG)
   actions = Array{Array{CarAction,1},1}(numLanes)
   for ln in 1:numLanes
     actions[ln] = Array{CarAction,1}()
-    carNo = 1
     ldCarIS = Nullable{CarLocalISL0}()
     for carIS in globalISL1.neighborhood[ln]
       carPhySt = carIS.physicalState
@@ -93,7 +92,7 @@ function getOtherCarsAction_LCR(globalISL1::GlobalStateL1, rng::AbstractRNG)
       g = AVG_GAP
       #Longitudinal acceleration
       if (ln != egoLane)
-        if !isnull(ldCarIS)#carNo != 1
+        if !isnull(ldCarIS)
           dxdot = ldCarIS.physicalState.state[3] - xdot
           g = ldCarIS.physicalState.state[1] - x
         end
@@ -142,7 +141,6 @@ function getOtherCarsAction_LCR(globalISL1::GlobalStateL1, rng::AbstractRNG)
 
       push!(actions[ln], CarAction(ddotx, ydot))
 
-      carNo += 1
       ldCarIS = carIS
     end
   end
@@ -288,7 +286,6 @@ end
 ChangeLaneRightPOMDP() = ChangeLaneRightPOMDP(0.9, -0.5, -50.0, 0.0, -3.0, -2.0, -0.2, LANE_WIDTH/2.0, AVG_HWY_VELOCITY)
 discount(p::ChangeLaneRightPOMDP) = p.discount_factor
 isterminal(::ChangeLaneRightPOMDP, act::Int64) = act == length(EgoActionSpace().actions)
-#Needs to be updated. No need for absent
 function isterminal(p::ChangeLaneRightPOMDP, st::GlobalStateL1)
   st.terminal ? true : false
 end
@@ -312,19 +309,19 @@ end
 Base.eltype(::ChangeLaneRightNormalStateDist) = GlobalStateL1
 
 function initial_state_distribution(p::ChangeLaneRightPOMDP)
-  println("Begin initial_state_distribution")
+  #println("Begin initial_state_distribution")
   egoDist = NTuple{3,NormalDist}((NormalDist(0.0,0.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   lLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(- 3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   cLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP,10.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   rLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   rFDist  = NTuple{3,NormalDist}((NormalDist(-AVG_GAP/2.0,10.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   fRNDist = NTuple{3,NormalDist}((NormalDist(0.0,10.0), NormalDist(3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  println("End initial_state_distribution")
+  #println("End initial_state_distribution")
   return(ChangeLaneRightNormalStateDist(egoDist, lLDist, cLDist, rLDist, rFDist, fRNDist))
 end
 
 function rand(rng::AbstractRNG, d::ChangeLaneRightNormalStateDist, frameList::Array{CarFrameL0,1}=getFrameList())
-  println("Begin rand")
+  #println("Begin rand")
   egoState = randCarPhysicalState(rng, d.egoDist)
 
   neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS_LC)
@@ -388,21 +385,27 @@ function rand(rng::AbstractRNG, d::ChangeLaneRightNormalStateDist, frameList::Ar
   #else
     #println("rnd = ", rnd, " skipping farRightClosestState")
   end
-  println("End rand")
+  #println("End rand")
   return (GlobalStateL1(false, egoState, neighborhood))
 end
 
 
 #Generate observation
 function generate_o(p::ChangeLaneRightPOMDP, s::Union{GlobalStateL1,Void}, a::Union{Int64,Void}, sp::GlobalStateL1, rng::AbstractRNG)
-  println("Begin generate_o")
+  #println("Begin generate_o")
   numLanes = length(sp.neighborhood)
   nbrObs = Array{Array{CarPhysicalState,1},1}(numLanes)
 
-  egoPos = sp.ego
+  ego_x = sp.ego.state[1] + randn(rng) * OBS_NOISE_X
+  ego_y = sp.ego.state[2] + randn(rng) * OBS_NOISE_Y
+  ego_xdot = sp.ego.state[3] + randn(rng) * OBS_NOISE_XDOT
+  egoPos = CarPhysicalState((ego_x, ego_y, ego_xdot))
+
 
   for ln in 1:numLanes
     nbrObs[ln] = Array{CarPhysicalState,1}()
+    #println("Lane $ln")
+    carIdx = 1
     for car in sp.neighborhood[ln]
       phySt = car.physicalState
       x = phySt.state[1]
@@ -417,50 +420,57 @@ function generate_o(p::ChangeLaneRightPOMDP, s::Union{GlobalStateL1,Void}, a::Un
       xdot += noise_xdot
 
       carObs = CarPhysicalState((x,y,xdot))
+      #println("Car No. $carIdx ",phySt)
       push!(nbrObs[ln], carObs)
+      #println("Car No. ", length(nbrObs[ln])," ",carObs)
+      #println()
+      carIdx += 1
     end
   end
-  println("End generate_o")
+  #println("End generate_o")
   return EgoObservation(egoPos, nbrObs)
 end
 
 #Generate next state
 function generate_s(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  println("Begin generate_s")
+  #println("Begin generate_s")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if s.terminal
-    println("End generate_s")
+    #println("End generate_s")
     return s
   end
   if a == length(actionSet.actions)
-    println("End generate_s")
+    #println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
   if checkForCollision(s)
-    println("End generate_s")
+    #println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
+  #println("Begin update egoState")
   egoState = propagateCar(s.ego, act, TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+  #println("End update egoState. Begin update neighborhood")
   neighborhood = updateNeighborState_LCR(s, rng)
+  #println("End update neighborhood")
 
   sp = GlobalStateL1(false, egoState, neighborhood)
-  println("End generate_s")
+  #println("End generate_s")
   return sp
 end
 
 #Generate reward
 function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  println("Begin reward")
+  #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if (s.terminal )
-    println("End reward")
+    #println("End reward")
     return 0.0
   end
   if a == length(actionSet.actions)
-    println("End reward")
+    #println("End reward")
     return p.collisionCost   #Just giving it the minimum value. Not sure how MCVI treats the value
   end
 
@@ -469,7 +479,7 @@ function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Abstra
   nbrhood = s.neighborhood
   #TODO: More stuff here
   if checkForCollision(s)
-    println("End reward")
+    #println("End reward")
     return p.collisionCost
   end
   #if abs(egoSt.state[2] - p.target_y) < 0.5
@@ -494,25 +504,25 @@ function reward(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::Abstra
   end
   xdot = egoSt.state[3]
   reward += (abs(xdot - p.target_vel) * p.velocityCost)
-  println("End reward")
+  #println("End reward")
   return reward
 end
 
 #TODO: Needs to be refined
 function generate_sor(p::ChangeLaneRightPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  println("Begin generate_sor")
+  #print("\rBegin generate_sor")
   sp = generate_s(p, s, a, rng)
   o = generate_o(p, nothing, nothing, sp, rng)
 
   r = reward(p,s,a,rng)
-  println("End generate_sor")
+  #print("\rEnd generate_sor")
   return sp, o, r
 end
 
 function initial_state(p::ChangeLaneRightPOMDP, rng::AbstractRNG)
-  println("Begin initial_state")
+  #println("Begin initial_state")
   isd = initial_state_distribution(p)
-  println("End initial_state")
+  #println("End initial_state")
   return rand(rng, isd)
 end
 

@@ -8,7 +8,8 @@ function test_solve_right()
     prob = ChangeLaneRightPOMDP()
     sim = MCVISimulator()
 
-    solver = MCVISolver(sim, nothing, 1, 100, 8, 500, 1000, 5000, 50, ChangeLaneRightLowerBound(sim.rng), ChangeLaneRightUpperBound(sim.rng))
+    #num_iter=1, num_particles=100, obs_branching=8, num_states=500, num_prune_obs=1000, num_eval_belief=5000, num_obs=50
+    solver = MCVISolver(sim, nothing, 1, 10, 8, 50, 100, 50, 5, ChangeLaneRightLowerBound(sim.rng), ChangeLaneRightUpperBound(sim.rng))
     println("Solving...")
     policy = solve(solver, prob)
     println("...Solved")

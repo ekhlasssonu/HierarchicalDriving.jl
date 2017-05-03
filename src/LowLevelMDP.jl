@@ -1,32 +1,52 @@
-#include("Global.jl")
+type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
+  discount_factor::Float64
+  nbrLaneMarkings::Array{Float64,1} #numLanes + 1 values
+  egoStartState::CarPhysicalState
+  egoTargetState::NTuple{2, CarPhysicalState} #Two values with lb and ub on target physical state
+  goalReward::Float64
+  collisionCost::Float64
+  movementCost::Float64
+  hardbrakingCost::Float64
+  discomfortCost::Float64
+  velocityDeviationCost::Float64
+  frameList::Array{CarFrameL0,1}
+end
 
-#import Base: ==, +, *, -, copy
-#import Random.rand
+LowLevelMDP() = LowLevelMDP(0.9, [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH], CarPhysicalState((0.0, 3.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)), (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - VEL_STD_DEV)), CarPhysicalState((100.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + VEL_STD_DEV))), 5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
 
-#Modeling parameters
-NUM_INTENTIONS_LC = 4 #Only 4 possible target lanes, movement is fixed based on
+discount(p::LowLevelMDP) = p.discount_factor
+isterminal(::LowLevelMDP, act::Int64) = act == length(EgoActionSpace().actions)
 
+function isterminal(p::LowLevelMDP, st::GlobalStateL1)
+  st.terminal ? true : false
+end
+#From actions
+n_actions(p::LowLevelMDP) = length(actions(p))
+actions(::LowLevelMDP) = EgoActionSpace()
 
-using POMDPs
+n_lanes(p::LowLevelMDP) = length(p.nbrLaneMarkings)-1
 
-function getLaneNo_LCL(phySt::CarPhysicalState)
-  if phySt.state[2] > LANE_WIDTH
-    return 4
-  elseif phySt.state[2] > 0
-    return 3
-  elseif phySt.state[2] > -LANE_WIDTH
-    return 2
-  else
-    return 1
+function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
+  y = phySt.state[2]
+  if y < p.nbrLaneMarkings[1]
+    return 0
+  end
+  if y > p.nbrLaneMarkings[length(p.nbrLaneMarkings)]
+    return length(p.nbrLaneMarkings)
+  end
+  for j = 2:length(p.nbrLaneMarkings)
+    if y < p.nbrLaneMarkings[j]
+      return j-1
+    end
   end
 end
 
-#=
-      Sort the neighborhood with cars in each lane ordered in decreasing order of x.
-      Car may change lane as well leaving lanes empty
-=#
-function sortNeighborhood_LCL(neighborhood::Array{Array{CarLocalISL0,1},1})
+function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
   numLanes = length(neighborhood)
+  if numLanes != n_lanes(p)
+    println("[sortNeighborhood] Incorrect number of lanes.")
+  end
+
   sorted = Array{Array{CarLocalISL0,1},1}(numLanes)
 
   for ln in 1:numLanes
@@ -39,7 +59,14 @@ function sortNeighborhood_LCL(neighborhood::Array{Array{CarLocalISL0,1},1})
       y = carPhySt.state[2]
 
       #Find the lane to which the car belongs
-      carLane = getLaneNo_LCL(carPhySt)
+      carLane = getLaneNo(carPhySt, p)
+      if carLane < 1
+        carLane = 1
+        #println("carLane = 0")
+      elseif carLane > numLanes
+        carLane = numLanes
+        #println("carLane > numLanes")
+      end
       if length(sorted[carLane]) == 0
         push!(sorted[carLane], carIS)
       else
@@ -67,19 +94,19 @@ function sortNeighborhood_LCL(neighborhood::Array{Array{CarLocalISL0,1},1})
   return sorted
 end
 
+function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
+  laneCenters = []
+  for ln in 2:length(p.nbrLaneMarkings)
+    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  end
 
-#Get car action given global state and model
-function getOtherCarsAction_LCL(globalISL1::GlobalStateL1, rng::AbstractRNG)
-  #=
-  Change next part for different maneuvers
-  =#
-  laneCenters = [-3*LANE_WIDTH/2, -LANE_WIDTH/2, LANE_WIDTH/2, 3*LANE_WIDTH/2]
-  #=
-  End of variable part
-  =#
   egoState = globalISL1.ego
-  egoLane = getLaneNo_LCL(egoState)
+  egoLane = getLaneNo(egoState, p)
   numLanes = length(globalISL1.neighborhood)
+  if numLanes != n_lanes(p)
+    println("[getOtherCarsAction] Incorrect numLanes. ")
+  end
+
   actions = Array{Array{CarAction,1},1}(numLanes)
   for ln in 1:numLanes
     actions[ln] = Array{CarAction,1}()
@@ -151,19 +178,24 @@ function getOtherCarsAction_LCL(globalISL1::GlobalStateL1, rng::AbstractRNG)
   return actions
 end
 
-function updateNeighborState_LCL(globalISL1::GlobalStateL1, rng::AbstractRNG)
+function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
   #Maneuver specific
-  laneCenters = [-3*LANE_WIDTH/2, -LANE_WIDTH/2, LANE_WIDTH/2, 3*LANE_WIDTH/2]
-
+  laneCenters = []
+  for ln in 2:length(p.nbrLaneMarkings)
+    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  end
   #Maneuver independent
-  egoLane = getLaneNo_LCL(globalISL1.ego)
+  egoLane = getLaneNo_LCR(globalISL1.ego)
   numLanes = length(globalISL1.neighborhood)
+  if numLanes != n_lanes(p)
+    println("[updateNeighborState] Incorrect numLanes. ")
+  end
   updatedNeighborhood = Array{Array{CarLocalISL0,1},1}(numLanes)
 
     nxtFlPhySt = Nullable{CarPhysicalState}()
     nxtLdPhySt = Nullable{CarPhysicalState}()
 
-  actions = getOtherCarsAction_LCL(globalISL1, rng) #This gives all cars' (sampled) action in the order they are on neighborhood
+  actions = getOtherCarsAction(globalISL1, p, rng) #This gives all cars' (sampled) action in the order they are on neighborhood
 
   for ln in 1:numLanes #For every lane
     numCars = length(globalISL1.neighborhood[ln])
@@ -264,200 +296,139 @@ function updateNeighborState_LCL(globalISL1::GlobalStateL1, rng::AbstractRNG)
     end
   end
 
-  return sortNeighborhood_LCL(updatedNeighborhood)
+  return sortNeighborhood(updatedNeighborhood, p)
 
 end
 
-#=
-     Change Lane to Left.
-     y component of the state is taken relative to the lane marking
-     The values of medians are given as Parameters of
-
-=#
-type ChangeLaneLeftPOMDP <:POMDPs.POMDP{GlobalStateL1, Int64, EgoObservation}
-  discount_factor::Float64
-  goalReward::Float64       #Based on distance from target_y
-  collisionCost::Float64    #Negative for collision, zero otherwise
-  movementCost::Float64     #Every action has a negative (zero) cost associated to it, could be different from next one
-  hardbrakingCost::Float64  #Greater cost for hardbraking than any other action
-  discomfortCost::Float64   #Third party discomfort cost. If third party brakeshard.
-  velocityCost::Float64     #Proportional to deviation in velocity from target_vel
-  target_y::Float64         #Desired lateral position
-  target_vel::Float64       #Target velocity
+type LowLevelNormalDist
+  problem::LowLevelMDP
+  probDensity::Array{Array{NTuple{3, NormalDist},1},1}   #2D array of normal distribution
 end
 
-ChangeLaneLeftPOMDP() = ChangeLaneLeftPOMDP(0.9, -0.5, -50.0, 0.0, -3.0, -2.0, -0.2, -LANE_WIDTH/2.0, AVG_HWY_VELOCITY)
-discount(p::ChangeLaneLeftPOMDP) = p.discount_factor
-isterminal(::ChangeLaneLeftPOMDP, act::Int64) = act == length(EgoActionSpace().actions)
-#Needs to be updated. No need for absent
-function isterminal(p::ChangeLaneLeftPOMDP, st::GlobalStateL1)
-  st.terminal ? true : false
-end
-#From actions
-n_actions(p::ChangeLaneLeftPOMDP) = length(actions(p))
-actions(::ChangeLaneLeftPOMDP) = EgoActionSpace()
+function initial_state_distribution(p::LowLevelMDP)
+  numLanes = n_lanes(p)
+  egoState = p.egoStartState
+  ego_x = egoState.state[1]
 
-#=
-Generate state
+  maxCars = 2 * ones(UInt64, numLanes)
+  probDensity = Array{Array{NTuple{3, NormalDist},1},1}(numLanes)
 
-=#
-type ChangeLaneLeftNormalStateDist
-  egoDist::NTuple{3,NormalDist}
-  farLeftNearestDist::NTuple{3,NormalDist}
-  leftLeadingDist::NTuple{3,NormalDist}
-  leftFollowingDist::NTuple{3,NormalDist}
-  currLeadingDist::NTuple{3,NormalDist}
-  rightLeadingDist::NTuple{3,NormalDist}
-end
+  laneCenters = []
+  for ln in 2:length(p.nbrLaneMarkings)
+    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  end
 
-Base.eltype(::ChangeLaneLeftNormalStateDist) = GlobalStateL1
+  for ln in 1:numLanes
+    probDensity[ln] = Array{NTuple{3, NormalDist},1}()
+    mean_y = laneCenters[ln]
 
-function initial_state_distribution(p::ChangeLaneLeftPOMDP)
-  egoDist = NTuple{3,NormalDist}((NormalDist(0.0,0.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  fLNDist = NTuple{3,NormalDist}((NormalDist(0.0,10.0), NormalDist(-3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  lLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  lFDist  = NTuple{3,NormalDist}((NormalDist(-AVG_GAP/2.0,10.0), NormalDist(-LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  cLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP,10.0), NormalDist(LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  rLDist  = NTuple{3,NormalDist}((NormalDist(AVG_GAP/2.0,10.0), NormalDist(3 * LANE_WIDTH/2.0, LANE_WIDTH * 3.0/16.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-  return(ChangeLaneLeftNormalStateDist(egoDist, fLNDist, lLDist, lFDist, cLDist, rLDist))
+    ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+    flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+
+    push!(probDensity[ln], ldCarDist)
+    push!(probDensity[ln], flCarDist)
+  end
+  return LowLevelNormalDist(p, probDensity)
 end
 
-function rand(rng::AbstractRNG, d::ChangeLaneLeftNormalStateDist, frameList::Array{CarFrameL0,1}=getFrameList())
-  egoState = randCarPhysicalState(rng, d.egoDist)
+function rand(rng::AbstractRNG, d::LowLevelNormalDist)
+  problem = d.problem
+  egoState = problem.egoStartState
+  numLanes = n_lanes(problem)
+  neighborhood = Array{Array{CarLocalISL0,1}}(numLanes)
 
-  neighborhood = Array{Array{CarLocalISL0,1}}(NUM_INTENTIONS_LC)
-  #TODO: There has to be a better way
-  for i in 1:NUM_INTENTIONS_LC
+  for i in 1:numLanes
     neighborhood[i] = Array{CarLocalISL0,1}()
   end
 
-  rnd = rand(rng)
-  if (rnd > 0.25)
-    farLeftNearestState = randCarLocalISL0(rng, d.farLeftNearestDist, [0.6, 0.3, 0.1, 0.0], frameList)
-    push!(neighborhood[1], farLeftNearestState)
-  end
+  for ln in 1:numLanes
+    for carProbDensity in d.probDensity[ln]
+      rnd = rand(rng)
+      if (rnd > 0.4)
+        intentionArray = zeros(Float64, numLanes)
+        intentionArray[ln] = 0.6
+        if ln-1 > 0
+          intentionArray[ln-1] = 0.2
+        else
+          intentionArray[ln] += 0.2
+        end
+        if ln+1 <= numLanes
+          intentionArray[ln+1] = 0.2
+        else
+          intentionArray[ln] += 0.2
+        end
+        carState = randCarLocalISL0(rng, carProbDensity, intentionArray, problem.frameList)
 
-  rnd = rand(rng)
-  if (rnd > 0.25)
-    leftLeadingState = randCarLocalISL0(rng, d.leftLeadingDist, [0.2, 0.5, 0.2, 0.1], frameList)
-    #Assert that it is indeed ahead of ego vehicle
-    if leftLeadingState.physicalState.state[1] < egoState.state[1]
-      leftLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, leftLeadingState.physicalState.state[2], leftLeadingState.physicalState.state[3])
+        push!(neighborhood[ln], carState)
+      end
     end
-    push!(neighborhood[2], leftLeadingState)
   end
-
-  rnd = rand(rng)
-  if (rnd > 0.25)
-    leftFollowingState = randCarLocalISL0(rng, d.leftFollowingDist, [0.2, 0.6, 0.2, 0.0], frameList)
-    #Assert that it is indeed behind ego vehicle
-    if leftFollowingState.physicalState.state[1] > egoState.state[1]
-      leftFollowingState.physicalState.state = (egoState.state[1] - AVG_GAP/2.0, leftFollowingState.physicalState.state[2], leftFollowingState.physicalState.state[3])
-    end
-    push!(neighborhood[2], leftFollowingState)
-  end
-
-  rnd = rand(rng)
-  if (rnd > 0.25)
-    currLeadingState = randCarLocalISL0(rng, d.currLeadingDist, [0.1, 0.2, 0.5, 0.2], frameList)
-    #Assert that it is indeed ahead of ego vehicle
-    if currLeadingState.physicalState.state[1] < egoState.state[1]
-      currLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, currLeadingState.physicalState.state[2], currLeadingState.physicalState.state[3])
-    end
-    push!(neighborhood[3], currLeadingState)
-  end
-
-  rnd = rand(rng)
-  if (rnd > 0.25)
-    rightLeadingState = randCarLocalISL0(rng, d.rightLeadingDist, [0.1, 0.2, 0.2, 0.5], frameList)
-    #Assert that it is indeed ahead of ego vehicle
-    if rightLeadingState.physicalState.state[1] < egoState.state[1]
-      rightLeadingState.physicalState.state = (egoState.state[1] + AVG_GAP/2.0, rightLeadingState.physicalState.state[2], rightLeadingState.physicalState.state[3])
-    end
-    push!(neighborhood[4], rightLeadingState)
-  end
-
   return (GlobalStateL1(false, egoState, neighborhood))
 end
 
-#Generate observation
-function generate_o(p::ChangeLaneLeftPOMDP, s::Union{GlobalStateL1,Void}, a::Union{Int64,Void}, sp::GlobalStateL1, rng::AbstractRNG)
-  numLanes = length(sp.neighborhood)
-  nbrObs = Array{Array{CarPhysicalState,1},1}(numLanes)
-
-  egoPos = sp.ego
-
-  for ln in 1:numLanes
-    nbrObs[ln] = Array{CarPhysicalState,1}()
-    for car in sp.neighborhood[ln]
-      phySt = car.physicalState
-      x = phySt.state[1]
-      y = phySt.state[2]
-      xdot = phySt.state[3]
-
-      noise_x = randn(rng) * OBS_NOISE_X
-      noise_y = randn(rng) * OBS_NOISE_Y
-      noise_xdot = randn(rng) * OBS_NOISE_XDOT
-      x += noise_x
-      y += noise_y
-      xdot += noise_xdot
-
-      carObs = CarPhysicalState((x,y,xdot))
-      push!(nbrObs[ln], carObs)
-    end
-  end
-
-  return EgoObservation(egoPos, nbrObs)
-end
-
 #Generate next state
-function generate_s(p::ChangeLaneLeftPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  #println("Begin generate_s")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if s.terminal
+    #println("End generate_s")
     return s
   end
   if a == length(actionSet.actions)
+    #println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
   if checkForCollision(s)
+    #println("End generate_s")
     return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
+  #println("Begin update egoState")
   egoState = propagateCar(s.ego, act, TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
-  neighborhood = updateNeighborState_LCL(s, rng)
+  #println("End update egoState. Begin update neighborhood")
+  neighborhood = updateNeighborState(s, p, rng)
+  #println("End update neighborhood")
 
   sp = GlobalStateL1(false, egoState, neighborhood)
-
+  #println("End generate_s")
   return sp
 end
 
 #Generate reward
-function reward(p::ChangeLaneLeftPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
   if (s.terminal )
+    #println("End reward")
     return 0.0
   end
   if a == length(actionSet.actions)
-    return p.collisionCost
+    #println("End reward")
+    return p.collisionCost   #Just giving it the minimum value. Not sure how MCVI treats the value
   end
 
   reward = 0.0
-
   egoSt = s.ego
   nbrhood = s.neighborhood
   #TODO: More stuff here
   if checkForCollision(s)
+    #println("End reward")
     return p.collisionCost
   end
-  #if abs(egoSt.state[2] - p.target_y) < 0.5
-    reward += (p.goalReward * abs(egoSt.state[2] - p.target_y))
-  #end
+
+  #Goal defined as a range
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
+  if (targetLB.state[1] < egoSt.state[1]) && (egoSt.state[1] < targetUB.state[1]) && (targetLB.state[2] < egoSt.state[2]) && (egoSt.state[2] < targetUB.state[2])
+    reward += p.goalReward
+  end
   if act.ddot_x <= -4.0
     reward += p.hardbrakingCost
   end
-  nbrActions = getOtherCarsAction_LCL(s, rng) #Randomness is iffy but IDM part is constant, so no problem there
+  nbrActions = getOtherCarsAction(s, p, rng) #Randomness is iffy but IDM part is constant, so no problem there
+  #TODO: Should only consider hardbraking induced by Ego vehicle
   discomfort = false
   for ln in 1:length(nbrActions)
     for carAct in nbrActions[ln]
@@ -472,40 +443,48 @@ function reward(p::ChangeLaneLeftPOMDP, s::GlobalStateL1, a::Int64, rng::Abstrac
     end
   end
   xdot = egoSt.state[3]
-  reward += (abs(xdot - p.target_vel) * p.velocityCost)
+  if (targetLB.state[3] > egoSt.state[3])
+    reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
+  elseif (egoSt.state[3] > targetUB.state[3])
+    reward += (abs(xdot - targetUB.state[3]) * p.velocityDeviationCost)
+  end
 
+  #println("End reward")
   return reward
 end
 
-#TODO: Needs to be refined
-function generate_sor(p::ChangeLaneLeftPOMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  #print("\rBegin generate_sor")
   sp = generate_s(p, s, a, rng)
-  o = generate_o(p, nothing, nothing, sp, rng)
+
   r = reward(p,s,a,rng)
-  return sp, o, r
+  #print("\rEnd generate_sor")
+  return sp, r
 end
 
-function initial_state(p::ChangeLaneLeftPOMDP, rng::AbstractRNG)
+function initial_state(p::LowLevelMDP, rng::AbstractRNG)
+  #println("Begin initial_state")
   isd = initial_state_distribution(p)
+  #println("End initial_state")
   return rand(rng, isd)
 end
 
-type ChangeLaneLeftLowerBound
+type LowLevelLowerBound
     rng::AbstractRNG
 end
 
-type ChangeLaneLeftUpperBound
+type LowLevelUpperBound
     rng::AbstractRNG
 end
 
-function lower_bound(lb::ChangeLaneLeftLowerBound, p::ChangeLaneLeftPOMDP, s::GlobalStateL1)
+function lower_bound(lb::LowLevelLowerBound, p::LowLevelMDP, s::GlobalStateL1)
     return p.collisionCost
 end
 
-function upper_bound(ub::ChangeLaneLeftUpperBound, p::ChangeLaneLeftPOMDP, s::GlobalStateL1)
-    return 0.0
+function upper_bound(ub::LowLevelUpperBound, p::LowLevelMDP, s::GlobalStateL1)
+    return p.goalReward
 end
 
-function init_lower_action(p::ChangeLaneLeftPOMDP)
+function init_lower_action(p::ChangeLaneRightPOMDP)
     length(EgoActionSpace())
 end

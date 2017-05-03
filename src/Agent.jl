@@ -128,6 +128,7 @@ function getFrameList()
   return frameList
 end
 
+#Not to be used. Too specific.
 function getModelList()
   modelList = Array{CarModelL0,1}()
   frameList = getFrameList()

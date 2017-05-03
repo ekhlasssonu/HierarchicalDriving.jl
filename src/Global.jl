@@ -2,7 +2,7 @@
 
 #Noise parameters
 OBS_NOISE_X = 0.1
-OBS_NOISE_Y = 0.01
+OBS_NOISE_Y = 0.3
 OBS_NOISE_XDOT = 1.0
 
 TRN_NOISE_X = 0.1
@@ -71,7 +71,7 @@ function getLaneNo(phySt::CarPhysicalState, laneCenters::Array{Float64,1})
   return length(laneCenters)
 end
 
-function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0,0,0)))
+function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0.0,0.0,0.0)))
   # If car is absent or car velocity is negative or actions is terminal
   #=if(s.absent || s.state[3] < 0.0) || (a.ddot_x == Inf) || (a.ddot_x == -Inf) || (a.dot_y == Inf) || (a.dot_y == -Inf)
     return s
@@ -131,9 +131,6 @@ function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDi
     targetLane += 1
   end
   if (targetLane > length(intentionDist))
-    println("THIS SHOULD NOT HAPPEN")
-    println("THIS SHOULD NOT HAPPEN")
-    println("THIS SHOULD NOT HAPPEN")
     targetLane = length(intentionDist)
   end
   frame = frameList[Base.rand(1:length(frameList))]
@@ -162,4 +159,59 @@ end
 
 function gauss(x::Float64, sigma::Float64)
   return 1 / sqrt(2*pi) / sigma * exp(-1*x^2/(2*sigma^2))
+end
+
+#TODO: This is not the pdf by convention, this is obs_weight
+function pdf(s::GlobalStateL1, o::EgoObservation)
+  #println("In pdf")
+  #println()
+  #println(s)
+  #println()
+  #println(o)
+  #First verify that the size of neighborohood is same in both s and o
+  if length(s.neighborhood) != length(o.neighborhood)
+    #println("Neighborhood length mismatch.",length(s.neighborhood),", ",length(o.neighborhood), " End pdf, 0.0")
+    return 0.0
+  end
+
+  numLanes = length(s.neighborhood)
+  for ln in 1:numLanes
+    if length(s.neighborhood[ln]) != length(o.neighborhood[ln])
+      #println("Lane $ln Length mismatch.", length(s.neighborhood[ln]),", ", length(o.neighborhood[ln]), " End pdf, ", (1e-8)^abs(length(s.neighborhood[ln])-length(o.neighborhood[ln])))
+      return (1e-8)^abs(length(s.neighborhood[ln])-length(o.neighborhood[ln]))
+    end
+  end
+
+  #Ego State
+  #if !(s.ego == o.ego)
+  #  println("Ego State mismatch.", #=s.ego,", ", o.ego,=# " End pdf, 0.0001")
+  #  return 0.0001
+  #end
+  prob = 1.0
+  s_ego = s.ego
+  o_ego = o.ego
+  p_x = gauss(abs(s_ego.state[1]-o_ego.state[1]), OBS_NOISE_X)
+  prob *= p_x
+  p_y = gauss(abs(s_ego.state[2]-o_ego.state[2]), OBS_NOISE_Y)
+  prob *= p_y
+  p_xdot = gauss(abs(s_ego.state[3]-o_ego.state[3]), OBS_NOISE_XDOT)
+  prob *= p_xdot
+  #println("p_x = ", p_x, " p_y = ", p_y, " p_xdot = ", p_xdot)
+  #if (s.ego == o.ego)
+    #println(s_ego,"\n", o_ego,"\n", prob)
+  #end
+
+  for ln in 1:numLanes
+    numCars = length(s.neighborhood[ln])
+    for cIdx = 1:numCars
+      phySt_st = s.neighborhood[ln][cIdx].physicalState
+      phySt_ob = o.neighborhood[ln][cIdx]
+
+      prob *= gauss(abs(phySt_st.state[1]-phySt_ob.state[1]), OBS_NOISE_X)
+      prob *= gauss(abs(phySt_st.state[2]-phySt_ob.state[2]), OBS_NOISE_Y)
+      prob *= gauss(abs(phySt_st.state[3]-phySt_ob.state[3]), OBS_NOISE_XDOT)
+    end
+  end
+  #println("End pdf, $prob")
+  return prob
 end

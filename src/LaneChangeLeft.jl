@@ -509,3 +509,39 @@ end
 function init_lower_action(p::ChangeLaneLeftPOMDP)
     length(EgoActionSpace())
 end
+
+#TODO: This is not the pdf by convention, this is obs_weight
+function pdf(s::GlobalStateL1, o::EgoObservation)
+  #First verify that the size of neighborohood is same in both s and o
+  if length(s.neighborhood) != length(o.neighborhood)
+    return 0.0
+  end
+
+  numLanes = length(s.neighborhood)
+  for ln in 1:numLanes
+    if length(s.neighborhood[ln]) != length(o.neighborhood[ln])
+      return 0.0
+    end
+  end
+
+  #Ego State
+  if !(s.ego == o.ego)
+    return 0.0
+  end
+
+  prob = 1.0
+  for ln in 1:numLanes
+    numCars = length(s.neighborhood[ln])
+    for cIdx = 1:numCars
+      phySt_st = s.neighborhood[ln][cIdx].physicalState
+      phySt_ob = o.neighborhood[ln][cIdx]
+
+      prob *= gauss(abs(phySt_st.state[1]-phySt_ob.state[1]), OBS_NOISE_X)
+      prob *= gauss(abs(phySt_st.state[2]-phySt_ob.state[2]), OBS_NOISE_Y)
+      prob *= gauss(abs(phySt_st.state[3]-phySt_ob.state[3]), OBS_NOISE_XDOT)
+    end
+  end
+  return prob
+end
+
+obs_weight(::POMDP, s::GlobalStateL1, o::EgoObservation) = pdf(s, o)

@@ -3,22 +3,27 @@ using HierarchicalDriving
 
 using POMDPToolbox
 
-importall MCVI
+using POMCPOW
 
 function test_solve_right()
     prob = ChangeLaneRightPOMDP()
-    sim = MCVISimulator()
+    sim = HistoryRecorder(max_steps=10)
 
-    #num_iter=1, num_particles=100, obs_branching=8, num_states=500, num_prune_obs=1000, num_eval_belief=5000, num_obs=50
-    solver = MCVISolver(sim, nothing, 1, 10, 8, 50, 100, 50, 5, ChangeLaneRightLowerBound(sim.rng), ChangeLaneRightUpperBound(sim.rng))
+    solver = POMCPOWSolver()
     println("Solving...")
     policy = solve(solver, prob)
     println("...Solved")
-    up = updater(policy)
-    reward = simulate(sim, prob, policy, up, up.root)
-    println("Reward:", reward)
+    s = rand(Base.GLOBAL_RNG, initial_state_distribution(prob))
+    @show a = action(policy, initial_state_distribution(prob))
+    sp = generate_s(prob, s, a, Base.GLOBAL_RNG)
+    @show sp
+    # up = VoidUpdater()
+    # reward = simulate(sim, prob, policy, up, initial_state_distribution(prob))
+    # println("Reward:", reward)
     return true
 end
+
+test_solve_right()
 
 #=function test_solve_left()
     prob = ChangeLaneLeftPOMDP()

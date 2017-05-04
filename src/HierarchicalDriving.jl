@@ -27,7 +27,7 @@ include("LaneChangeLeft.jl")
 include("MaintainLaneAt23.jl")
 include("MaintainLaneAt25.jl")
 include("MaintainLaneAt27.jl")
-include("Visualization.jl")
 include("LowLevelMDP.jl")
+include("Visualization.jl")
 
 end # module

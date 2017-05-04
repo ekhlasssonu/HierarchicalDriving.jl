@@ -12,7 +12,11 @@ type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
   frameList::Array{CarFrameL0,1}
 end
 
-LowLevelMDP() = LowLevelMDP(0.9, [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH], CarPhysicalState((0.0, 3.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)), (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - VEL_STD_DEV)), CarPhysicalState((100.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + VEL_STD_DEV))), 5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
+LowLevelMDP() = LowLevelMDP(0.9,
+                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
+                            CarPhysicalState((0.0, 3.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
+                            (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - VEL_STD_DEV)), CarPhysicalState((100.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + VEL_STD_DEV))),
+                            5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
 
 discount(p::LowLevelMDP) = p.discount_factor
 isterminal(::LowLevelMDP, act::Int64) = act == length(EgoActionSpace().actions)

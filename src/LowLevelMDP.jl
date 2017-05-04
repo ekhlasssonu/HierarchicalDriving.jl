@@ -18,7 +18,7 @@ discount(p::LowLevelMDP) = p.discount_factor
 isterminal(::LowLevelMDP, act::Int64) = act == length(EgoActionSpace().actions)
 
 function isterminal(p::LowLevelMDP, st::GlobalStateL1)
-  st.terminal ? true : false
+  st.terminal > 0 ? true : false
 end
 #From actions
 n_actions(p::LowLevelMDP) = length(actions(p))
@@ -98,6 +98,40 @@ function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLe
   return sorted
 end
 
+function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
+  laneCenters = []
+  for ln in 2:length(p.nbrLaneMarkings)
+    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  end
+
+  egoState = globalISL1.ego
+  egoLane = getLaneNo(egoState, p)
+  numLanes = length(globalISL1.neighborhood)
+  if numLanes != n_lanes(p)
+    println("[check_induced_hardbraking] Incorrect numLanes. ")
+  end
+
+  for carIS in globalISL1.neighborhood[egoLane]
+    carPhySt = carIS.physicalState
+    if carPhySt.state[1] > egoState.state[1]  #Not interested in cars ahead of the ego vehicle
+      continue
+    end
+    carModel = carIS.modelL0
+    x = carPhySt.state[1]
+    xdot = carPhySt.state[3]
+    dxdot = egoState.state[3] - xdot
+    g = egoState.state[1] - x
+
+    ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+    if ddotx < -4.0
+      return true
+    end
+    break # Only interested in car immediately behind ego car.
+  end
+
+  return false
+end
+
 function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
   laneCenters = []
   for ln in 2:length(p.nbrLaneMarkings)
@@ -175,7 +209,7 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
       if target_y != y
         ydot *= (target_y - y)/abs(target_y - y)  #By convention
       end
-      println("Node No.", carModelNode.nodeLabel, ", Lane No. $ln, Target Lane = $tLn, Car No. $carNo, curr_y $y, target_y $target_y, ydot $ydot, ddotx = $ddotx")
+      #println("Node No.", carModelNode.nodeLabel, ", Lane No. $ln, Target Lane = $tLn, Car No. $carNo, curr_y $y, target_y $target_y, ydot $ydot, ddotx = $ddotx")
       push!(actions[ln], CarAction(ddotx, ydot))
 
       carNo += 1
@@ -185,6 +219,7 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
 
   return actions
 end
+
 
 function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
   laneCenters = []
@@ -238,7 +273,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       xddot = carAct.ddot_x
       updatedCarPhySt = propagateCar(carPhySt, CarAction(xddot, ydot), TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
-      #TODO Update car's model, frame remains same, target lane remains same, only currNode changes
+      #Update car's model, frame remains same, target lane remains same, only currNode changes
       carFSM = carFrame.policy
       #Generate observation for other car's lateral motion
       edgeLabel = "Undetermined"
@@ -374,7 +409,7 @@ function rand(rng::AbstractRNG, d::LowLevelNormalDist)
       end
     end
   end
-  return (GlobalStateL1(false, egoState, neighborhood))
+  return (GlobalStateL1(0, egoState, neighborhood))
 end
 
 #Generate next state
@@ -382,17 +417,17 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
   #println("Begin generate_s")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if s.terminal
+  if s.terminal > 0
     #println("End generate_s")
     return s
   end
   if a == length(actionSet.actions)
-    #println("End generate_s")
-    return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
+    #println("Terminal action generate_s")
+    return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
   end
   if checkForCollision(s)
-    #println("End generate_s")
-    return GlobalStateL1(true, CarPhysicalState(s.ego.state), s.neighborhood)
+    #println("Collision generate_s")
+    return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
   #println("Begin update egoState")
@@ -400,8 +435,12 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
   #println("End update egoState. Begin update neighborhood")
   neighborhood = updateNeighborState(s, p, rng)
   #println("End update neighborhood")
-
-  sp = GlobalStateL1(false, egoState, neighborhood)
+  sp = GlobalStateL1(0, egoState, neighborhood)
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
+  if (targetLB.state[1] < egoState.state[1]) && (egoState.state[1] < targetUB.state[1]) && (targetLB.state[2] < egoState.state[2]) && (egoState.state[2] < targetUB.state[2])
+    sp = GlobalStateL1(2, egoState, neighborhood)
+  end
   #println("End generate_s")
   return sp
 end
@@ -411,19 +450,18 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if (s.terminal )
+  if (s.terminal > 0 )
     #println("End reward")
     return 0.0
   end
   if a == length(actionSet.actions)
     #println("End reward")
-    return p.collisionCost   #Just giving it the minimum value. Not sure how MCVI treats the value
+    return p.collisionCost - 5.0  #Just giving it the minimum value. Not sure how MCVI treats the value
   end
 
   reward = 0.0
   egoSt = s.ego
   nbrhood = s.neighborhood
-  #TODO: More stuff here
   if checkForCollision(s)
     #println("End reward")
     return p.collisionCost
@@ -438,21 +476,10 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   if act.ddot_x <= -4.0
     reward += p.hardbrakingCost
   end
-  nbrActions = getOtherCarsAction(s, p, rng) #Randomness is iffy but IDM part is constant, so no problem there
-  #TODO: Should only consider hardbraking induced by Ego vehicle
-  discomfort = false
-  for ln in 1:length(nbrActions)
-    for carAct in nbrActions[ln]
-      if carAct.ddot_x <= -4.0
-        reward += p.discomfortCost
-        discomfort = true
-        break
-      end
-    end
-    if discomfort
-      break
-    end
+  if check_induced_hardbraking(s, p)
+    reward += p.discomfortCost
   end
+
   xdot = egoSt.state[3]
   if (targetLB.state[3] > egoSt.state[3])
     reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)

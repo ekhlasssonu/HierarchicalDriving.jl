@@ -36,11 +36,11 @@ end
 
 #State of world. Should work for upper level as well.
 type GlobalStateL1
-  terminal::Bool
+  terminal::Int64 #0 for not terminal, 1 for collision, 2 for success
   ego::CarPhysicalState
   neighborhood::Array{Array{CarLocalISL0,1},1}  #In order  of lane no. and x position
 end
-GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1}) = GlobalStateL1(false, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1})
+GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1}) = GlobalStateL1(0, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1})
 ==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.terminal == s2.terminal) && (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
 Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.terminal, hash(s1.ego, hash(s1.neighborhood, h)))
 Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.terminal, s1.ego, s1.neighborhood)

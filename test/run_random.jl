@@ -54,7 +54,7 @@ println()
 =#
 println("Generic Low Level")
 p5 = LowLevelMDP()
-for i in 1:100
+for i in 1:10000
   print("\r$i")
   policy = RandomPolicy(p5)
   hr = HistoryRecorder(max_steps = 20)

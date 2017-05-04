@@ -510,6 +510,7 @@ function init_lower_action(p::ChangeLaneLeftPOMDP)
     length(EgoActionSpace())
 end
 
+#=
 #TODO: This is not the pdf by convention, this is obs_weight
 function pdf(s::GlobalStateL1, o::EgoObservation)
   #First verify that the size of neighborohood is same in both s and o
@@ -543,5 +544,5 @@ function pdf(s::GlobalStateL1, o::EgoObservation)
   end
   return prob
 end
-
+=#
 obs_weight(::POMDP, s::GlobalStateL1, o::EgoObservation) = pdf(s, o)

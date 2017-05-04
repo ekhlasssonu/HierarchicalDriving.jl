@@ -163,11 +163,6 @@ end
 
 #TODO: This is not the pdf by convention, this is obs_weight
 function pdf(s::GlobalStateL1, o::EgoObservation)
-  #println("In pdf")
-  #println()
-  #println(s)
-  #println()
-  #println(o)
   #First verify that the size of neighborohood is same in both s and o
   if length(s.neighborhood) != length(o.neighborhood)
     #println("Neighborhood length mismatch.",length(s.neighborhood),", ",length(o.neighborhood), " End pdf, 0.0")

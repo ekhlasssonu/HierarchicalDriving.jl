@@ -543,6 +543,8 @@ function upper_bound(ub::ChangeLaneRightUpperBound, p::ChangeLaneRightPOMDP, s::
     return 0.0
 end
 
+#=
 function init_lower_action(p::ChangeLaneRightPOMDP)
     length(EgoActionSpace())
 end
+=#

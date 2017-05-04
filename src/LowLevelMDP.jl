@@ -28,17 +28,13 @@ n_lanes(p::LowLevelMDP) = length(p.nbrLaneMarkings)-1
 
 function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
   y = phySt.state[2]
-  if y < p.nbrLaneMarkings[1]
-    return 0
-  end
-  if y > p.nbrLaneMarkings[length(p.nbrLaneMarkings)]
-    return length(p.nbrLaneMarkings)
-  end
-  for j = 2:length(p.nbrLaneMarkings)
+
+  for j = 1:length(p.nbrLaneMarkings)
     if y < p.nbrLaneMarkings[j]
       return j-1
     end
   end
+  return length(p.nbrLaneMarkings)
 end
 
 function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
@@ -185,7 +181,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
     push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
   end
   #Maneuver independent
-  egoLane = getLaneNo_LCR(globalISL1.ego)
+  egoLane = getLaneNo(globalISL1.ego,p)
   numLanes = length(globalISL1.neighborhood)
   if numLanes != n_lanes(p)
     println("[updateNeighborState] Incorrect numLanes. ")

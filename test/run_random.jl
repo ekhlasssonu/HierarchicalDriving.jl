@@ -2,6 +2,7 @@ using POMDPs
 
 using POMDPToolbox
 
+#=
 println("Right")
 p = ChangeLaneRightPOMDP()
 for i in 1:100
@@ -11,7 +12,7 @@ for i in 1:100
   simulate(hr, p, policy)
 end
 println()
-#=
+
 println("Left")
 p1 = ChangeLaneLeftPOMDP()
 for i in 1:100
@@ -52,9 +53,10 @@ for i in 1:100
 end
 println()
 =#
+
 println("Generic Low Level")
 p5 = LowLevelMDP()
-for i in 1:10000
+for i in 1:10
   print("\r$i")
   policy = RandomPolicy(p5)
   hr = HistoryRecorder(max_steps = 20)

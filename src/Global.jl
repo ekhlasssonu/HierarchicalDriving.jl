@@ -125,14 +125,24 @@ end
 function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDist::Array{Float64,1}, frameList::Array{CarFrameL0,1})
   phySt = randCarPhysicalState(rng, d)
   cumProbDist = cumsum(intentionDist)
+  #=for i in intentionDist
+    print(i," ")
+  end
+  println()
+  for i in cumProbDist
+    print(i," ")
+  end
+  println()=#
   x = Base.rand(rng)
+  #println("x = ", x)
   targetLane = 1
-  while (targetLane < length(cumProbDist)) && (x <= cumProbDist[targetLane])
+  while (targetLane < length(cumProbDist)) && (x > cumProbDist[targetLane])
     targetLane += 1
   end
   if (targetLane > length(intentionDist))
     targetLane = length(intentionDist)
   end
+  #println("targetLane = ", targetLane)
   frame = frameList[Base.rand(1:length(frameList))]
   node = frame.policy.nodeSet[1]
 

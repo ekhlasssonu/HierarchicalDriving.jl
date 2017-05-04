@@ -87,6 +87,14 @@ function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLe
 
     end
   end
+  #=println("Sorted neighborhood")
+  for ln in 1:length(sorted)
+    print("Lane no. ", ln, " : ")
+    for carIS in sorted[ln]
+      print(carIS.physicalState.state[1], " ")
+    end
+    println()
+  end=#
   return sorted
 end
 
@@ -136,6 +144,8 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
 
       ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
 
+      #NOTE: IDM acceleration part is correct.
+
       #Lateral velocity
       tLn = carModel.targetLane
       carFrame = carModel.frame
@@ -153,17 +163,19 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
 
       ydot = 0.0
       if rnd < ydotCumProb[1]
-        ydot = -2.0
+        ydot = 2.0
       elseif rnd < ydotCumProb[2]
         ydot = 0.0
       else
-        ydot = 2.0
+        ydot = -2.0
       end
       y = carPhySt.state[2]
       target_y = laneCenters[tLn]
 
-      ydot *= (target_y - y)/abs(target_y - y)  #By convention
-
+      if target_y != y
+        ydot *= (target_y - y)/abs(target_y - y)  #By convention
+      end
+      println("Node No.", carModelNode.nodeLabel, ", Lane No. $ln, Target Lane = $tLn, Car No. $carNo, curr_y $y, target_y $target_y, ydot $ydot, ddotx = $ddotx")
       push!(actions[ln], CarAction(ddotx, ydot))
 
       carNo += 1
@@ -175,12 +187,11 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
 end
 
 function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
-  #Maneuver specific
   laneCenters = []
   for ln in 2:length(p.nbrLaneMarkings)
     push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
   end
-  #Maneuver independent
+
   egoLane = getLaneNo(globalISL1.ego,p)
   numLanes = length(globalISL1.neighborhood)
   if numLanes != n_lanes(p)
@@ -188,15 +199,15 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
   end
   updatedNeighborhood = Array{Array{CarLocalISL0,1},1}(numLanes)
 
-    nxtFlPhySt = Nullable{CarPhysicalState}()
-    nxtLdPhySt = Nullable{CarPhysicalState}()
-
   actions = getOtherCarsAction(globalISL1, p, rng) #This gives all cars' (sampled) action in the order they are on neighborhood
 
   for ln in 1:numLanes #For every lane
     numCars = length(globalISL1.neighborhood[ln])
     updatedNeighborhood[ln] = Array{CarLocalISL0,1}()
     for carIdx in 1:numCars #For every car in the lane
+      nxtFlPhySt = Nullable{CarPhysicalState}()
+      nxtLdPhySt = Nullable{CarPhysicalState}()
+
       carIS = globalISL1.neighborhood[ln][carIdx] #Initial IS of the current car under consideration
       carAct = actions[ln][carIdx] #action performed by current car
 
@@ -217,7 +228,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
       target_y = laneCenters[targetLane]
       y = carPhySt.state[2]
-      ydot = 0
+      ydot = 0.0
       if target_y > y
         ydot = min(carAct.dot_y, (target_y - y)/TIME_STEP)
       else
@@ -233,42 +244,41 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       edgeLabel = "Undetermined"
       #If reached target
       #println("Target y = ", target_y, " y = ", y, " target lane = ", targetLane, " lane = ", ln)
-      if abs(target_y - y) < 0.25
+      if abs(target_y - y) < LANE_WIDTH/16.0
         edgeLabel = "Reached"
         #else
       elseif targetLane == ln #If already in the targetLane then might as well finish moving to center
         edgeLabel = "SafeSmooth"
       else
         #Check smooth and safe, first check if nextLeading and nextFollowing are known
-                for nxtLnIS in globalISL1.neighborhood[nextLane]
-                    if nxtLnIS.physicalState.state[1] >= carPhySt.state[1]
-                        nxtLdPhySt = nxtLnIS.physicalState
-                    elseif nxtLnIS.physicalState.state[1] <= carPhySt.state[1]
-                        nxtFlPhySt = nxtLnIS.physicalState
-                        break
-                    end
+        for nxtLnIS in globalISL1.neighborhood[nextLane]
+            if nxtLnIS.physicalState.state[1] >= carPhySt.state[1]
+                nxtLdPhySt = nxtLnIS.physicalState
+            elseif nxtLnIS.physicalState.state[1] <= carPhySt.state[1]
+                nxtFlPhySt = nxtLnIS.physicalState
+                break
+            end
+        end
+        if egoLane == nextLane
+            if globalISL1.ego.state[1] > carPhySt.state[1]
+                if isnull(nxtLdPhySt) || (nxtLdPhySt.state[1] > globalISL1.ego.state[1])
+                    nxtLdPhySt = globalISL1.ego
                 end
-                if egoLane == nextLane
-                    if globalISL1.ego.state[1] > carPhySt.state[1]
-                        if isnull(nxtLdPhySt) || (nxtLdPhySt.state[1] > globalISL1.ego.state[1])
-                            nxtLdPhySt = globalISL1.ego
-                        end
-                    elseif globalISL1.ego.state[1] < carPhySt.state[1]
-                        if isnull(nxtFlPhySt) || (nxtFlPhySt.state[1] < globalISL1.ego.state[1])
-                          nxtFlPhySt = globalISL1.ego
-                        end
-                    end
+            elseif globalISL1.ego.state[1] < carPhySt.state[1]
+                if isnull(nxtFlPhySt) || (nxtFlPhySt.state[1] < globalISL1.ego.state[1])
+                  nxtFlPhySt = globalISL1.ego
                 end
-                if (!isnull(nxtLdPhySt) && !isnull(nxtFlPhySt))
-                    isSmooth = isLaneChangeSmooth(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtLdPhySt, xddot)
-                    isSafe = isLaneChangeSafe(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtFlPhySt)
-                    if (isSafe && isSmooth)
-                        edgeLabel = "SafeSmooth"
-                    else
-                        edgeLabel = "UnsafeOrUnsmooth"
-                    end
-                end
-
+            end
+        end
+        if (!isnull(nxtLdPhySt) && !isnull(nxtFlPhySt))
+            isSmooth = isLaneChangeSmooth(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtLdPhySt, xddot)
+            isSafe = isLaneChangeSafe(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtFlPhySt)
+            if (isSafe && isSmooth)
+                edgeLabel = "SafeSmooth"
+            else
+                edgeLabel = "UnsafeOrUnsmooth"
+            end
+        end
       end
       #println("EdgeLabel = ", edgeLabel)
       updatedNode = currNode
@@ -285,7 +295,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
           break
         end
       end
-      #println("CurrNode = ",currNode.nodeLabel," UpdatedNode = ",updatedNode)
+      #println("CurrNode = ",currNode.nodeLabel," UpdatedNode = ",updatedNode.nodeLabel)
       updatedModel = CarModelL0(targetLane, updatedFrame, updatedNode)
       updatedIS = CarLocalISL0(updatedCarPhySt, updatedModel)
       push!(updatedNeighborhood[ln], updatedIS)
@@ -305,6 +315,7 @@ function initial_state_distribution(p::LowLevelMDP)
   numLanes = n_lanes(p)
   egoState = p.egoStartState
   ego_x = egoState.state[1]
+  egoLane = getLaneNo(egoState, p)
 
   maxCars = 2 * ones(UInt64, numLanes)
   probDensity = Array{Array{NTuple{3, NormalDist},1},1}(numLanes)
@@ -318,9 +329,13 @@ function initial_state_distribution(p::LowLevelMDP)
     probDensity[ln] = Array{NTuple{3, NormalDist},1}()
     mean_y = laneCenters[ln]
 
-    ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-    flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-
+    if ln != egoLane
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+    else
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+    end
     push!(probDensity[ln], ldCarDist)
     push!(probDensity[ln], flCarDist)
   end

@@ -57,7 +57,7 @@ type CarLocalISL0
   modelL0::CarModelL0
 end
 ==(is1::CarLocalISL0, is2::CarLocalISL0) = (is1.physicalState == is2.physicalState) && (is1.modelL0 == is2.modelL0)
-Base.hash(is::CarLocalISL0, h::UInt64=zero(UInt64)) = hash(physicalState, hash(modelL0, h))
+Base.hash(is::CarLocalISL0, h::UInt64=zero(UInt64)) = hash(is.physicalState, hash(is.modelL0, h))
 Base.copy(is::CarLocalISL0) = CarLocalISL0(is.physicalState, is.modelL0)
 
 collision(s1::CarPhysicalState, is2::CarLocalISL0) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.modelL0.frame.carWidth)/2)

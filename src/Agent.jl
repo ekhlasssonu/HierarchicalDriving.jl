@@ -128,22 +128,6 @@ function getFrameList()
   return frameList
 end
 
-#Not to be used. Too specific.
-function getModelList()
-  modelList = Array{CarModelL0,1}()
-  frameList = getFrameList()
-  for targetLane in 1:4
-    for fr in frameList
-      for node in fr.policy.nodeSet
-        model = CarModelL0(targetLane, fr, node)
-        push!(modelList, model)
-      end
-    end
-  end
-  return modelList
-end
-
-
 type EgoActionSpace
   actions::Array{CarAction,1}
 end

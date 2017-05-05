@@ -41,6 +41,15 @@ function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
   return length(p.nbrLaneMarkings)
 end
 
+function getLaneNo(y::Float64, p::LowLevelMDP)
+  for j = 1:length(p.nbrLaneMarkings)
+    if y < p.nbrLaneMarkings[j]
+      return j-1
+    end
+  end
+  return length(p.nbrLaneMarkings)
+end
+
 function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
   numLanes = length(neighborhood)
   if numLanes != n_lanes(p)
@@ -529,4 +538,126 @@ end
 
 function init_lower_action(p::ChangeLaneRightPOMDP)
     length(EgoActionSpace())
+end
+
+#Heuristics approach
+type subintentional_policy <: Policy
+  egoFrame::CarFrameL0
+  problem::LowLevelMDP
+end
+
+function subintentional_policy(p::LowLevelMDP)
+  fsm = createFSM()
+  idmNormal = createIDM_normal()
+  mobilNormal = createMOBIL_normal()
+  egoFrame = CarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
+
+  return subintentional_policy(egoModel, p)
+end
+
+function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
+  problem = si_policy.problem
+  egoFrame = si_policy.egoFrame
+
+  lon = egoFrame.longitudinal
+  lat = egoFrame.lateral
+
+  egoState = gblSt.ego
+  egoLane = getLaneNo(egoState, problem)
+  x = egoState.state[1]
+  y = egoState.state[2]
+  xdot = egoState.state[3]
+
+  g= AVG_GAP
+  dxdot = 0.0
+
+  neighborhood = gblSt.neighborhood
+
+  #target_x = (problem.egoTargetState[1].state[1] + problem.egoTargetState[2].state[1])/2.0
+
+  #IDM acceleration
+  ldcarstate = Nullable{CarPhysicalState}()
+  for carIS in neighborhood[egoLane]
+    if carIS.physicalState.state[1] > x
+      ldcarstate = carIS.physicalState
+    else
+      break
+    end
+  end
+
+  if (!isnull(ldcarstate))
+    g = ldcarstate.state[1] - x
+    dxdot = ldcarstate.state[3] - xdot
+  end
+
+  ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+
+  if ddotx < -4.0
+    ddotx = -6.0
+  elseif ddotx < -1.0
+    ddotx = -2.0
+  elseif ddotx < 1.0
+    ddotx = 0.0
+  else
+    ddotx = 2.0
+  end
+
+  #Lateral motion determined by target_y and MOBIL
+  target_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0
+
+  targetLane = getLaneNo(target_y, p)
+  laneCenters = []
+  for ln in 2:length(p.nbrLaneMarkings)
+    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  end
+
+  nextLane = egoLane
+  if targetLane > egoLane
+    nextLane += 1
+  elseif targetLane < egoLane
+    nextLane -= 1
+  end
+
+  ydot = (target_y - y)/abs(target_y - y) * 2.0
+  if nextLane == egoLane  #Move to desired y
+    if abs(target_y - y) < LANE_WIDTH/16
+      ydot = 0.0
+    end
+  else
+    nxtFlPhySt = Nullable{CarPhysicalState}()
+    nxtLdPhySt = Nullable{CarPhysicalState}()
+
+    for nxtLnIS in neighborhood[nextLane]
+      if nxtLnIS.physicalState.state[1] > x
+        nxtLdPhySt = nxtLnIS.physicalState
+      elseif nxtLnIS.physicalState.state[1] <= x
+        nxtFlPhySt = nxtLnIS.physicalState
+        break
+      end
+    end
+    isSafe = true
+    isSmooth = true
+    #Check if unsafe
+    if !isnull(nxtFlPhySt)
+      isSafe = isLaneChangeSafe(lat, lon, egoState, nxtFlPhySt)
+    end
+    if !isnull(nxtLdPhySt)
+      isSmooth = isLaneChangeSmooth(lat, lon, egoState, nxtLdPhySt, ddotx)
+    end
+    if !isSafe || !isSmooth
+      ydot = 0.0
+    end
+  end
+
+  egoAct = CarAction(ddotx, ydot)
+  actIdx = 0
+  egoActions = EgoActionSpace()
+  for act in egoActions.actions
+    actIdx += 1
+    if act == egoAct
+      break
+    end
+  end
+  return actIdx
+
 end

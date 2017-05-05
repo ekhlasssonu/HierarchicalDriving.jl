@@ -1,3 +1,4 @@
+println("MCTS Policy")
 p5 = LowLevelMDP()
 solver = MCTSSolver()
 policy = solve(solver, p5)

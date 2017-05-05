@@ -16,7 +16,8 @@ export ChangeLaneRightPOMDP,
         MaintainAt27POMDP,
         LowLevelMDP,
         LowLevelLowerBound,
-        LowLevelUpperBound
+        LowLevelUpperBound,
+        subintentional_policy
 
 include("FSM.jl")
 include("DrivingParams.jl")

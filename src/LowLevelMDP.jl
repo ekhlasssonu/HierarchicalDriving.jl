@@ -552,7 +552,7 @@ function subintentional_policy(p::LowLevelMDP)
   mobilNormal = createMOBIL_normal()
   egoFrame = CarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
 
-  return subintentional_policy(egoModel, p)
+  return subintentional_policy(egoFrame, p)
 end
 
 function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
@@ -590,7 +590,7 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
     dxdot = ldcarstate.state[3] - xdot
   end
 
-  ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+  ddotx = get_idm_accln(lon, xdot, dxdot, g)
 
   if ddotx < -4.0
     ddotx = -6.0
@@ -605,12 +605,8 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
   #Lateral motion determined by target_y and MOBIL
   target_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0
 
-  targetLane = getLaneNo(target_y, p)
-  laneCenters = []
-  for ln in 2:length(p.nbrLaneMarkings)
-    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
-  end
-
+  targetLane = getLaneNo(target_y, problem)
+  
   nextLane = egoLane
   if targetLane > egoLane
     nextLane += 1

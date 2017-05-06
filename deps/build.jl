@@ -7,3 +7,6 @@ if !in("AutoViz", packages)
     Pkg.clone("https://github.com/tawheeler/AutoViz.jl.git")
 end
 Pkg.build("AutoViz")
+if !in("PmapProgressMeter", packages)
+    Pkg.clone("https://github.com/slundberg/PmapProgressMeter.jl")
+end

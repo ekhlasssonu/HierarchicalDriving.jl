@@ -4,6 +4,8 @@ module HierarchicalDriving
 import Base: ==, +, *, -, copy, Random, hash
 importall POMDPs, MCVI
 import ParticleFilters: obs_weight
+using POMDPToolbox
+using DataFrames
 
 export ChangeLaneRightPOMDP,
         ChangeLaneRightLowerBound,
@@ -17,7 +19,11 @@ export ChangeLaneRightPOMDP,
         LowLevelMDP,
         LowLevelLowerBound,
         LowLevelUpperBound,
-        subintentional_policy
+        subintentional_policy,
+
+        SimSet,
+        PmapSimulator,
+        rerun
 
 include("FSM.jl")
 include("DrivingParams.jl")
@@ -29,6 +35,7 @@ include("MaintainLaneAt23.jl")
 include("MaintainLaneAt25.jl")
 include("MaintainLaneAt27.jl")
 include("LowLevelMDP.jl")
+include("Simulations.jl")
 include("Visualization.jl")
 
 end # module

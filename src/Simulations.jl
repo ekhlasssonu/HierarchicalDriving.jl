@@ -32,11 +32,13 @@ end
 
 type PmapSimulator <: Simulator
     analyze::Any # function or object returns a collection of pairs given the problem and a history
-    # show_progress::Bool
     individual_simulator::Simulator
     seeds::Nullable{AbstractVector}
+    show_progress::Bool # eventually maybe we should allow passing in a custom Progress
 end
-PmapSimulator(f::Function, is::Simulator) = PmapSimulator(f, is, nothing)
+PmapSimulator(f::Function, is::Simulator;
+              seeds=nothing,
+              show_progress=true) = PmapSimulator(f, is, seeds, show_progress)
 simulate(sim::PmapSimulator, args...) = simulate(sim.individual_simulator, args...)
 
 function simulate(sim::PmapSimulator, problems::AbstractVector, policies::AbstractVector, args...)
@@ -47,13 +49,19 @@ function simulate(sim::PmapSimulator, problems::AbstractVector, policies::Abstra
         seeds = get(sim.seeds)
     end
     @assert length(seeds) == length(problems)
-    results = pmap(seeds, problems, policies, args...) do seed, problem, policy, args...
-        # isim = sim.individual_simulator
-        # setrng!(isim, MersenneTwister(seed))
-        # setrng!(policy, MersenneTwister(hash(seed)))
-        # return analyze(sim.analyze, simulate(isim, problem, policy, args...))
-        result = seed_simulate(seed, sim, problem, policy, args...)
-        return analyze(sim.analyze, problem, result)
+
+    
+    if sim.show_progress
+        progress = Progress(length(problems), desc="Simulating: ")
+        results = pmap(progress, seeds, problems, policies, args...) do seed, problem, policy, args...
+            result = seed_simulate(seed, sim, problem, policy, args...)
+            return analyze(sim.analyze, problem, result)
+        end
+    else
+        results = pmap(seeds, problems, policies, args...) do seed, problem, policy, args...
+            result = seed_simulate(seed, sim, problem, policy, args...)
+            return analyze(sim.analyze, problem, result)
+        end
     end
     return make_dataframe(results)
 end

@@ -1,6 +1,8 @@
 using HierarchicalDriving
 using POMDPToolbox
 
+@everywhere using POMDPToolbox
+
 mdp = LowLevelMDP()
 heur = subintentional_policy(mdp)
 

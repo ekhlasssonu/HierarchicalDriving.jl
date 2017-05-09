@@ -8,7 +8,9 @@ using Iterators
 
 import Base.show
 
-function show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1})
+show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1}) = show(io, mime, (t..., [CarVelOverlay(), CarIDOverlay()]))
+
+function show{AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1, AT})
     mdp = t[1]
     s = t[2]
     scene = convert(Scene, s)
@@ -23,7 +25,7 @@ function show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1
                                   )
     # cam = FitToContentCamera(0.1)
     cam = SceneFollowCamera(12.0) # second number is pixels per meter
-    c = render(scene, roadway, [CarVelOverlay(), CarIDOverlay()], cam=cam)
+    c = render(scene, roadway, t[3], cam=cam)
     show(io, mime, c)
 end
 

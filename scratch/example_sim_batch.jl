@@ -1,6 +1,8 @@
 using HierarchicalDriving
 using POMDPToolbox
 
+@everywhere using POMDPToolbox
+
 mdp = LowLevelMDP()
 heur = subintentional_policy(mdp)
 
@@ -34,8 +36,9 @@ df = run(sets)
 println(df)
 
 # you can then rerun one of the simulations
-row = df[14, :]
-println("Rerunning")
+r = 14
+row = df[r, :]
+println("Rerunning $r")
 println(row)
 hist = rerun(row, SimSet(s, "random", "default"))
 @show discounted_reward(hist)

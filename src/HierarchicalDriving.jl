@@ -6,6 +6,8 @@ importall POMDPs, MCVI
 import ParticleFilters: obs_weight
 using POMDPToolbox
 using DataFrames
+using PmapProgressMeter
+using ProgressMeter
 
 export ChangeLaneRightPOMDP,
         ChangeLaneRightLowerBound,
@@ -20,6 +22,9 @@ export ChangeLaneRightPOMDP,
         LowLevelLowerBound,
         LowLevelUpperBound,
         subintentional_policy,
+        
+        CarIDOverlay,
+        CarVelOverlay,
 
         SimSet,
         PmapSimulator,

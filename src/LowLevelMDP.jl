@@ -15,7 +15,7 @@ end
 LowLevelMDP() = LowLevelMDP(0.9,
                             [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
                             CarPhysicalState((0.0, 3.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                            (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - VEL_STD_DEV)), CarPhysicalState((100.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + VEL_STD_DEV))),
+                            (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)), CarPhysicalState((500.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
                             5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
 
 discount(p::LowLevelMDP) = p.discount_factor
@@ -48,6 +48,27 @@ function getLaneNo(y::Float64, p::LowLevelMDP)
     end
   end
   return length(p.nbrLaneMarkings)
+end
+
+function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP)
+  egoState = gblISL1.ego
+  #=if egoState.absent
+    return true
+  end=#
+  y = egoState.state[2]
+  if y > p.nbrLaneMarkings[end] || y < p.nbrLaneMarkings[1]
+    return true
+  end
+  nbrhood = gblISL1.neighborhood
+  numLanes = length(nbrhood)
+  for ln in 1:numLanes
+    for carIS in nbrhood[ln]
+      if collision(egoState, carIS)
+        return true
+      end
+    end
+  end
+  return false
 end
 
 function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
@@ -190,6 +211,7 @@ function getOtherCarsAction(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abst
       end
 
       ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+      #println("Ln = $ln, CarNo = $carNo, ddotx = $ddotx, xdot = $xdot, desired xdot = ", carIS.modelL0.frame.longitudinal.xdot0)
 
       #NOTE: IDM acceleration part is correct.
 
@@ -438,7 +460,7 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
     #println("Terminal action generate_s")
     return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
   end
-  if checkForCollision(s)
+  if checkForCollision(s, p)
     #println("Collision generate_s")
     return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
   end
@@ -475,7 +497,7 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   reward = 0.0
   egoSt = s.ego
   nbrhood = s.neighborhood
-  if checkForCollision(s)
+  if checkForCollision(s, p)
     #println("End reward")
     return p.collisionCost
   end
@@ -483,7 +505,9 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   #Goal defined as a range
   targetLB = p.egoTargetState[1]
   targetUB = p.egoTargetState[2]
-  if (targetLB.state[1] < egoSt.state[1]) && (egoSt.state[1] < targetUB.state[1]) && (targetLB.state[2] < egoSt.state[2]) && (egoSt.state[2] < targetUB.state[2])
+  if ((targetLB.state[1] < egoSt.state[1]) && (egoSt.state[1] < targetUB.state[1])
+                  && (targetLB.state[2] < egoSt.state[2]) && (egoSt.state[2] < targetUB.state[2]))
+                  #&& (targetLB.state[3] < egoSt.state[3]) && (egoSt.state[3] < targetUB.state[3]))
     reward += p.goalReward
   end
   if act.ddot_x <= -4.0
@@ -606,7 +630,7 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
   target_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0
 
   targetLane = getLaneNo(target_y, problem)
-  
+
   nextLane = egoLane
   if targetLane > egoLane
     nextLane += 1

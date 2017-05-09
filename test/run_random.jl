@@ -53,7 +53,7 @@ for i in 1:100
 end
 println()
 =#
-
+#=
 println("Generic Low Level")
 p5 = LowLevelMDP()
 for i in 1:10
@@ -63,10 +63,10 @@ for i in 1:10
   simulate(hr, p5, policy)
 end
 println()
-
+=#
 println("Heuristics")
 p6 = LowLevelMDP()
-for i in 1:1000
+for i in 1:10
   print("\r$i")
   policy = subintentional_policy(p6)
   hr = HistoryRecorder(max_steps = 20)

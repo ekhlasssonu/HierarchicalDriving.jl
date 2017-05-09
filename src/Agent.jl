@@ -132,7 +132,7 @@ type EgoActionSpace
   actions::Array{CarAction,1}
 end
 #I am not sure how these function are supposed to work but just adding this line  for good measure
-EgoActionSpace() = EgoActionSpace([CarAction(-2.0,-2.0), CarAction(-2.0,0.0), CarAction(-2.0,2.0), CarAction(0.0,-2.0), CarAction(0.0,0.0), CarAction(0.0,2.0), CarAction(2.0,-2.0), CarAction(2.0,0.0), CarAction(2.0,2.0), CarAction(-6.0,0.0), CarAction(Inf,Inf)])
+EgoActionSpace() = EgoActionSpace([CarAction(0.0,0.0), CarAction(0.0,-2.0), CarAction(0.0,2.0), CarAction(-2.0,-2.0), CarAction(-2.0,0.0), CarAction(-2.0,2.0), CarAction(2.0,-2.0), CarAction(2.0,0.0), CarAction(2.0,2.0), CarAction(-6.0,0.0), CarAction(Inf,Inf)])
 
 Base.length(asp::EgoActionSpace) = length(asp.actions)
 iterator(actSpace::EgoActionSpace) = 1:length(actSpace.actions)

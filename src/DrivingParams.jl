@@ -44,7 +44,8 @@ end
 
 function get_idm_accln(idm::IDMParam,xdot::Float64,dxdot::Float64=0.0,g::Float64=AVG_GAP)
 	g_ = get_idm_g_star(idm, xdot, dxdot)
-  xddot = idm.a*(1.-(xdot/idm.xdot0)^idm.del - (g_/g)^2)
+	#println("xdot = $xdot idm.xdot0 = ", idm.xdot0," => (xdot/idm.xdot0)^idm.del = ",(xdot/idm.xdot0)^idm.del," g_ = $g_ g = $g =>  (g_/g)^2 = ", (g_/g)^2)
+  xddot = idm.a*(1. - (xdot/idm.xdot0)^idm.del - (g_/g)^2)
 	#dvdt = min(max(dvdt,-p.b),p.a)
 	return (xddot)::Float64
 end
@@ -68,17 +69,17 @@ Base.hash(a::MOBILParam,h::UInt64=zero(UInt64)) = hash(a.p,hash(a.b_safe,hash(a.
 
 
 function createIDM_timid()
-  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY-2.2352, 8.0, 4.0)
+  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY-2.2352, 4.0, 4.0)
 
 end
 
 function createIDM_normal()
-  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY, 7.0, 4.0)
+  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY, 2.0, 4.0)
 
 end
 
 function createIDM_aggressive()
-  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY+2.2352, 6.0, 4.0)
+  return IDMParam(2.0, 2.0, 1.5, AVG_HWY_VELOCITY+2.2352, 0.0, 4.0)
 
 end
 

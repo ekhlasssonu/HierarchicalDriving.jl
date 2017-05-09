@@ -76,4 +76,3 @@ function AutoViz.render!(rm::RenderModel, o::CarIDOverlay, scene::Scene, roadway
                          (@sprintf("%02.d",v.id), idx, idy, 14, colorant"white"))
     end
 end
-

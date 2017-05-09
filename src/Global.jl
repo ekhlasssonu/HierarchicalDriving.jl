@@ -150,22 +150,6 @@ function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDi
   return localISL0
 end
 
-function checkForCollision(gblISL1::GlobalStateL1)
-  egoState = gblISL1.ego
-  #=if egoState.absent
-    return true
-  end=#
-  nbrhood = gblISL1.neighborhood
-  numLanes = length(nbrhood)
-  for ln in 1:numLanes
-    for carIS in nbrhood[ln]
-      if collision(egoState, carIS)
-        return true
-      end
-    end
-  end
-  return false
-end
 
 function gauss(x::Float64, sigma::Float64)
   return 1 / sqrt(2*pi) / sigma * exp(-1*x^2/(2*sigma^2))

@@ -1,21 +1,3 @@
-#=
-# START WITH ONLY MDPS
-
-data is extracted by a reduction function that takes a problem and a history
-
-at minimum
-- problem
-- solver
-
-optionally
-- initial state
-- solver rng
-- simulation rng
-
-not?
-- simulator
-=#
-
 # XXX eventually this should not go here!!
 function setrng!(sim::HistoryRecorder, rng::AbstractRNG)
     sim.rng = rng

@@ -8,7 +8,9 @@ using Iterators
 
 import Base.show
 
-function show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1})
+show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1}) = show(io, mime, (t..., [CarVelOverlay(), CarIDOverlay()]))
+
+function show{AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1, AT})
     mdp = t[1]
     s = t[2]
     scene = convert(Scene, s)
@@ -23,7 +25,7 @@ function show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1
                                   )
     # cam = FitToContentCamera(0.1)
     cam = SceneFollowCamera(12.0) # second number is pixels per meter
-    c = render(scene, roadway, [CarVelOverlay(), CarIDOverlay()], cam=cam)
+    c = render(scene, roadway, t[3], cam=cam)
     show(io, mime, c)
 end
 
@@ -77,3 +79,35 @@ function AutoViz.render!(rm::RenderModel, o::CarIDOverlay, scene::Scene, roadway
     end
 end
 
+#=
+type CarInfoOverlay
+    textf::Function
+    strings
+end
+
+function AutoViz.render!(rm::RenderModel, o::CarInfoOverlay, scene::Scene, roadway)
+    for (i,v) in enumerate(scene)
+        cx = v.state.posG.x
+        cy = v.state.posG.y
+        # nx = cx - v.def.length/2
+        # ny = cy + v.def.width/2 - 0.6
+        # add_instruction!(rm, render_text,
+        #                  (@sprintf("%02.d",i), nx, ny, 14, colorant"white"))
+        idx = cx + v.def.length/2 + 1.0
+        idy = cy - v.def.width/2
+        add_instruction!(rm, render_text,
+                         (@sprintf("%02.d",v.id), idx, idy, 14, colorant"white"))
+    end
+end
+=#
+
+#=
+TextOverlay() do carstate::CarLocalISL0
+    return "target lane: $(carstate.modelL0.targetLane)"
+end
+
+# EQUIVALENT TO 
+
+f(carstate::CarLocalISL0) = "target lane: $(carstate.modelL0.targetLane)"
+TextOverlay(f)
+=#

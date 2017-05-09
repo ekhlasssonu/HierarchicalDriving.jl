@@ -22,6 +22,9 @@ export ChangeLaneRightPOMDP,
         LowLevelLowerBound,
         LowLevelUpperBound,
         subintentional_policy,
+        
+        CarIDOverlay,
+        CarVelOverlay,
 
         SimSet,
         PmapSimulator,

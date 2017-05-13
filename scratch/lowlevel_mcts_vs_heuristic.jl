@@ -3,6 +3,7 @@ using POMDPToolbox
 using POMDPs
 using MCTS
 using DataFrames
+using JLD
 
 @everywhere using POMDPToolbox
 
@@ -51,6 +52,10 @@ sets = [
 ]
 
 df = run(sets)
+
+filename = joinpath("data", "compare_$(Dates.format(now(), "E_d_u_HH_MM")).jld")
+println("saving to $filename")
+@save(filename, df)
 
 means = by(df, :policy_key, df -> mean(df[:reward]))
 println(means)

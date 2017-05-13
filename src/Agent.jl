@@ -28,7 +28,7 @@ CarPhysicalState(st::CarPhysicalState) = CarPhysicalState(st.state)
 Base.hash(s::CarPhysicalState, h::UInt64=zero(UInt64)) = hash(s.state,h)
 Base.copy(s::CarPhysicalState) = CarPhysicalState(s.state)
 
-collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH/2) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH/2)
+collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH)
 
 
 type CarFrameL0 <: Frame
@@ -61,23 +61,25 @@ Base.hash(is::CarLocalISL0, h::UInt64=zero(UInt64)) = hash(is.physicalState, has
 Base.copy(is::CarLocalISL0) = CarLocalISL0(is.physicalState, is.modelL0)
 
 collision(s1::CarPhysicalState, is2::CarLocalISL0) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.modelL0.frame.carWidth)/2)
-collision(is1::CarLocalISL0, is2::CarLocalISL0) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.modelL0.frame.carLength + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (is1.modelL0.frame.carWidth + is2.modelL0.frame.carWidth)/2)
+collision(is1::CarLocalISL0, is2::CarLocalISL0) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.modelL0.frame.carLength + is2.modelL0.frame.carLength)/2) && (abs(is1.physicalState.state[2] - is2.physicalState.state[2]) < (is1.modelL0.frame.carWidth + is2.modelL0.frame.carWidth)/2)
 
 #ddot_x is determined by IDM, Only for dot_y
 function createFSM()
-  nodeSet = Array{FSM_Node{Int64},1}(4)
-  for i in 1:4
+  nodeSet = Array{FSM_Node{Int64},1}(5)
+  for i in 1:5
     nodeSet[i] = FSM_Node{Int64}(i)
   end
-  edgeLabels = [FSM_Edge{String}("Reached"), FSM_Edge{String}("SafeSmooth"), FSM_Edge{String}("UnsafeOrUnsmooth"), FSM_Edge{String}("Undetermined")]
+  edgeLabels = [FSM_Edge{String}("Reached"),
+                FSM_Edge{String}("SafeSmooth"),
+                FSM_Edge{String}("UnsafeOrUnsmooth"),
+                FSM_Edge{String}("Undetermined")]
   actionProb = Dict{Tuple{FSM_Node{Int64}, Float64}, Float64}()
 
-  actionProb[(nodeSet[1],0.0)] = 0.5  #1: Keep straight with prob 0.5
-  actionProb[(nodeSet[1],2.0)] = 0.5  #1: Move toward target with prob 0.5
-  actionProb[(nodeSet[1],-2.0)] = 0.0 #TODO: I don't think this is necessary
-  actionProb[(nodeSet[2],0.0)] = 1.0  #2: Reached target keep straight for ever
-  actionProb[(nodeSet[3],0.0)] = 1.0  #3: Unsafe to move towards target, keep straight for now
-  actionProb[(nodeSet[4],2.0)] = 1.0  #4: Move towards the target
+  actionProb[(nodeSet[1], 0.0)] = 0.5  #1: Keep straight with prob 0.5
+  actionProb[(nodeSet[1], 2.0)] = 0.5  #1: Move toward target with prob 0.5
+  actionProb[(nodeSet[2], 0.0)] = 1.0  #2: Reached target keep straight for ever
+  actionProb[(nodeSet[3],-2.0)] = 1.0  #3: Unsafe to move towards target, move to the center of the current lane
+  actionProb[(nodeSet[4], 2.0)] = 1.0  #4: Move towards the target
 
   transitionProb = Dict{Tuple{FSM_Node{Int64}, FSM_Edge{String}, FSM_Node{Int64}}, Float64}()
 
@@ -99,9 +101,9 @@ function createFSM()
   transitionProb[(nodeSet[3], edgeLabels[4], nodeSet[4])] = 0.5 #Undeterminable, transition to 4 with prob 0.5
 
   transitionProb[(nodeSet[4], edgeLabels[1], nodeSet[2])] = 1.0 #Reached, transition to 2
-  transitionProb[(nodeSet[4], edgeLabels[2], nodeSet[4])] = 1.0 #∀ else, keep moving towards target.
-  transitionProb[(nodeSet[4], edgeLabels[3], nodeSet[4])] = 1.0
-  transitionProb[(nodeSet[4], edgeLabels[4], nodeSet[4])] = 1.0
+  transitionProb[(nodeSet[4], edgeLabels[2], nodeSet[4])] = 1.0 #safe, keep moving towards target.
+  transitionProb[(nodeSet[4], edgeLabels[3], nodeSet[3])] = 1.0 #unsafe, return to center of current lane
+  transitionProb[(nodeSet[4], edgeLabels[4], nodeSet[4])] = 1.0 #undeterminable, keep moving
 
   return FSM{Int64, Float64, String}(nodeSet, edgeLabels, actionProb, transitionProb)
 end
@@ -143,7 +145,7 @@ Base.rand(rng::AbstractRNG, asp::EgoActionSpace) = Base.rand(rng, 1:Base.length(
 
 #Modified MOBIL parameters. Ignoring parts for ensuring smooth traffic flow. Self interested lane changes only.
 function isLaneChangeSafe(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysicalState, nextFollowingState::CarPhysicalState)
-  tilda_xn_ddot = get_idm_accln(idm, nextFollowingState.state[3], selfState.state[3]-nextFollowingState.state[3], selfState.state[1]-nextFollowingState.state[1])
+  tilda_xn_ddot = get_idm_accln(idm, nextFollowingState.state[3], nextFollowingState.state[3] - selfState.state[3], selfState.state[1]-nextFollowingState.state[1]-CAR_LENGTH)
   if tilda_xn_ddot < -mobil.b_safe
     return false
   end
@@ -151,8 +153,8 @@ function isLaneChangeSafe(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysic
 end
 
 function isLaneChangeSmooth(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysicalState, nextLeadingState::CarPhysicalState, xc_ddot::Float64)
-	tilda_xc_ddot = get_idm_accln(idm, selfState.state[3], nextLeadingState.state[3]-selfState.state[3], nextLeadingState.state[1]-selfState.state[1])
-  if (tilda_xc_ddot - xc_ddot) < mobil.a_thr
+	tilda_xc_ddot = get_idm_accln(idm, selfState.state[3], selfState.state[3]-nextLeadingState.state[3], nextLeadingState.state[1]-selfState.state[1]-CAR_LENGTH)
+  if ((tilda_xc_ddot - xc_ddot) < mobil.a_thr) #Should I add this too? || (tilda_xc_ddot < -mobil.b_safe)
     return false
   end
   return true

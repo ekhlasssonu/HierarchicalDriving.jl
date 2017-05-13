@@ -69,7 +69,7 @@ p6 = LowLevelMDP()
 for i in 1:10
   print("\r$i")
   policy = subintentional_policy(p6)
-  hr = HistoryRecorder(max_steps = 20)
+  hr = HistoryRecorder(max_steps = 10)
   simulate(hr, p6, policy)
 end
 println()

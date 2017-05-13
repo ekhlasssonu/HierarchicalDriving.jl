@@ -24,14 +24,14 @@ function show{AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{LowLeve
                                    origin=VecSE2(es[1]-500.0, mean(mdp.nbrLaneMarkings[1:2]), 0.0),
                                   )
     # cam = FitToContentCamera(0.1)
-    cam = SceneFollowCamera(12.0) # second number is pixels per meter
+    cam = SceneFollowCamera(6.0) # second number is pixels per meter
     c = render(scene, roadway, t[3], cam=cam)
     show(io, mime, c)
 end
 
 function show(io::IO, mime::MIME"image/png", s::GlobalStateL1)
     scene = convert(Scene, s)
-    cam = SceneFollowCamera(12.0) # second number is pixels per meter
+    cam = SceneFollowCamera(6.0) # second number is pixels per meter
     c = render(scene, nothing, [CarVelOverlay(), CarIDOverlay()], cam=cam)
     show(io, mime, c)
 end

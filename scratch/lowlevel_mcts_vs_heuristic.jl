@@ -1,6 +1,8 @@
 using HierarchicalDriving
 using POMDPToolbox
 using POMDPs
+using MCTS
+using DataFrames
 
 @everywhere using POMDPToolbox
 
@@ -9,7 +11,18 @@ heur = subintentional_policy(mdp)
 
 policies = Dict{String, Policy}(
     "random" => RandomPolicy(mdp),
-    "heuristic" => heur
+    "heuristic" => heur,
+    "mcts" => begin
+        solver = DPWSolver(depth=20,
+                           exploration_constant=10.0,
+                           n_iterations=100,
+                           k_action=5.0,
+                           alpha_action=1/10,
+                           k_state=5.0,
+                           alpha_state=1/10,
+                          )
+        solve(solver, mdp)
+    end
 )
 
 problems = Dict{String, Any}(
@@ -33,17 +46,11 @@ s = SimSet(problems=problems,
            
 sets = [
     SimSet(s, "heuristic", "default"),
-    SimSet(s, "random", "default")
+    SimSet(s, "random", "default"),
+    SimSet(s, "mcts", "default")
 ]
 
 df = run(sets)
 
-println(df)
-
-# you can then rerun one of the simulations
-r = 14
-row = df[r, :]
-println("Rerunning $r")
-println(row)
-hist = rerun(row, SimSet(s, "random", "default"))
-@show discounted_reward(hist)
+means = by(df, :policy_key, df -> mean(df[:reward]))
+println(means)

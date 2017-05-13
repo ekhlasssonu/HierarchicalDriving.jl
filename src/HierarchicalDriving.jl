@@ -27,6 +27,7 @@ export ChangeLaneRightPOMDP,
         CarVelOverlay,
 
         SimSet,
+        SimResult,
         PmapSimulator,
         rerun
 

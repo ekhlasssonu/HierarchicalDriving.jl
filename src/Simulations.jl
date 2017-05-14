@@ -180,8 +180,9 @@ function Base.run(sets::AbstractVector)
         end
     end
     sim = first(sets)[:simulator]
-    sim.seeds = Nullable{AbstractVector}(seeds)
-    df = simulate(sim, problemlist, policylist)
+    rp = randperm(MersenneTwister(1), length(problemlist))
+    sim.seeds = Nullable{AbstractVector}(seeds[rp])
+    df = simulate(sim, problemlist[rp], policylist[rp])
     df[:set] = names
     df[:policy_key] = policy_keys
     df[:problem_key] = problem_keys

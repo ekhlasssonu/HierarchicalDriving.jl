@@ -495,18 +495,19 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
 end
 
 #Generate reward
-function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+
+function reward(p::LowLevelMDP, ::GlobalStateL1, a::Int, s::GlobalStateL1)
   #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if (s.terminal > 0 )
-    #println("End reward")
-    return 0.0
-  end
-  if a == length(actionSet.actions)
-    #println("End reward")
-    return p.collisionCost - 5.0  #Just giving it the minimum value. Not sure how MCVI treats the value
-  end
+  # if (s.terminal > 0 )
+  #   #println("End reward")
+  #   return 0.0
+  # end
+  # if a == length(actionSet.actions)
+  #   #println("End reward")
+  #   return p.collisionCost - 5.0  #Just giving it the minimum value. Not sure how MCVI treats the value
+  # end
 
   reward = 0.0
   egoSt = s.ego
@@ -546,7 +547,8 @@ function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRN
   #print("\rBegin generate_sor")
   sp = generate_s(p, s, a, rng)
 
-  r = reward(p,s,a,rng)
+  # r = reward(p,s,a,rng)
+  r = reward(p, s, a, sp)
   #print("\rEnd generate_sor")
   return sp, r
 end

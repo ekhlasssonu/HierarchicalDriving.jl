@@ -4,6 +4,8 @@ using POMDPs
 using MCTS
 using DataFrames
 using JLD
+using Reel
+using ProgressMeter
 
 @everywhere using POMDPToolbox
 
@@ -36,9 +38,28 @@ problems = Dict{String, Any}(
     "default" => mdp
 )
 
+seed = 27
+policy = policies["heuristic"]
+sim = HistoryRecorder(max_steps=40,
+                      show_progress=true,
+                      rng=MersenneTwister(seed))
+HierarchicalDriving.setrng!(policy, MersenneTwister(seed+10000))
+
+hist = simulate(sim, mdp, policy)
+@show discounted_reward(hist)
+
+frames = Frames(MIME("image/png"), fps=5)
+@showprogress "Creating gif..." for s in state_hist(hist)
+    push!(frames, (mdp, s))
+end
+
+filename = string(tempname(), "_hd_run.gif")
+write(filename, frames)
+println(filename)
+run(`setsid gifview $filename`)
 
 
-
+#=
 sim = PmapSimulator(HistoryRecorder(max_steps=40)) do r::SimResult
     hist = r[:history]
     return (:reward => discounted_reward(hist),
@@ -73,3 +94,4 @@ gui()
 means = by(df, :policy_key) do df
     DataFrame(reward=mean(df[:reward]), n_steps=mean(df[:n_steps]))
 end
+=#

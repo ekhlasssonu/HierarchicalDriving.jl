@@ -25,10 +25,15 @@ export ChangeLaneRightPOMDP,
         
         CarIDOverlay,
         CarVelOverlay,
+        CarPhysicalState,
 
         SimSet,
+        SimResult,
         PmapSimulator,
-        rerun
+        rerun,
+
+        LANE_WIDTH,
+        AVG_HWY_VELOCITY
 
 include("FSM.jl")
 include("DrivingParams.jl")

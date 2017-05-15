@@ -1,26 +1,31 @@
 using HierarchicalDriving
 using POMDPToolbox
+using POMDPs
 
 @everywhere using POMDPToolbox
 
 mdp = LowLevelMDP()
 heur = subintentional_policy(mdp)
 
-solvers = Dict{String, Any}(
-    "random" => RandomSolver(),
+policies = Dict{String, Policy}(
+    "random" => RandomPolicy(mdp),
     "heuristic" => heur
-) # can be solvers or policies
+)
 
 problems = Dict{String, Any}(
     "default" => mdp
 )
 
-sim = PmapSimulator(HistoryRecorder(max_steps=10)) do mdp, hist
+
+
+
+sim = PmapSimulator(HistoryRecorder(max_steps=10)) do r::SimResult
+    hist = r[:history]
     return (:reward => discounted_reward(hist),)
 end # do block defines what to do with the simulation result. Should be a collection of pairs
 
 s = SimSet(problems=problems,
-           solvers=solvers,
+           policies=policies,
            simulator=sim,
            n=10
           )

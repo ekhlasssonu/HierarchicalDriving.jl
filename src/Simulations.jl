@@ -9,11 +9,36 @@ function setrng!(p::RandomPolicy, rng::AbstractRNG)
     p.rng = rng
 end
 
+# SimResult #
+#############
+immutable SimResult
+    d::Dict{Symbol, Any}
+end
+
+SimResult(;kwargs...) = SimResult(Dict{Symbol, Any}(kwargs...))
+function SimResult(problem, policy, result ;kwargs...)
+    SimResult(Dict{Symbol, Any}(:problem=>problem, :policy=>policy, :result=>result, kwargs...))
+end
+
+Base.haskey(s::SimResult, k) = haskey(s.d, k)
+Base.getindex(s::SimResult, k) = s.d[k]
+Base.setindex!(s::SimResult, v, k) = setindex!(s.d, v, k)
+
+#= keys
+Always Present:
+    problem::Union{POMDP, MDP}
+    policy::Policy
+    result::Any # result from the individual_simulator
+Sometimes Present
+    history::SimHistory # if the individual_simulator is a HistoryRecorder
+=#
+
+
 # PmapSimulator #
 #################
 
 type PmapSimulator <: Simulator
-    analyze::Any # function or object returns a collection of pairs given the problem and a history
+    analyze::Any # function or object returns a collection of pairs given a SimResult
     individual_simulator::Simulator
     seeds::Nullable{AbstractVector}
     show_progress::Bool # eventually maybe we should allow passing in a custom Progress
@@ -32,17 +57,24 @@ function simulate(sim::PmapSimulator, problems::AbstractVector, policies::Abstra
     end
     @assert length(seeds) == length(problems)
 
-    
     if sim.show_progress
         progress = Progress(length(problems), desc="Simulating: ")
         results = pmap(progress, seeds, problems, policies, args...) do seed, problem, policy, args...
             result = seed_simulate(seed, sim, problem, policy, args...)
-            return analyze(sim.analyze, problem, result)
+            sr = SimResult(problem, policy, result)
+            if isa(result, SimHistory)
+                sr[:history] = result
+            end
+            return analyze(sim.analyze, sr)
         end
     else
         results = pmap(seeds, problems, policies, args...) do seed, problem, policy, args...
-            result = seed_simulate(seed, sim, problem, policy, args...)
-            return analyze(sim.analyze, problem, result)
+            hist = seed_simulate(seed, sim, problem, policy, args...)
+            sr = SimResult(problem, policy, result)
+            if isa(result, SimHistory)
+                sr[:history] = result
+            end
+            return analyze(sim.analyze, sr)
         end
     end
     return make_dataframe(results)
@@ -70,7 +102,7 @@ function make_dataframe(results::AbstractVector) # results should be a vector of
     return DataFrame(;columns...)
 end
 
-analyze(f::Function, p::Union{MDP, POMDP}, h::SimHistory) = f(p, h)
+analyze(f::Function, r::SimResult) = f(r)
 
 
 
@@ -87,9 +119,8 @@ Base.setindex!(s::SimSet, v, k) = setindex!(s.d, v, k)
 
 #=
 keys:
-    solver_key::String
-    solvers::Dict{String, Any}
-    solve_with::String (a problem key)
+    policy_key::String
+    policies::Dict{String, Any}
     problem_key::String
     problems::Dict{String, Any}
     simulator::Simulator
@@ -99,7 +130,7 @@ keys:
 =#
 
 function SimSet(base::SimSet=SimSet(Dict{Symbol,Any}()),
-                solver_key::String="",
+                policy_key::String="",
                 problem_key::String="";
                 kwargs...
                )
@@ -107,20 +138,19 @@ function SimSet(base::SimSet=SimSet(Dict{Symbol,Any}()),
     defaults = Dict{Symbol, Any}(:n=>1)
 
     keys = Dict{Symbol, Any}()
-    if !isempty(solver_key)
-        keys[:solver_key] = solver_key
+    if !isempty(policy_key)
+        keys[:policy_key] = policy_key
     end
     if !isempty(problem_key)
         keys[:problem_key] = problem_key
-        defaults[:solve_with] = problem_key
     end
 
     # merge all the options specified up to this point
     combined = merge(defaults, base.d, Dict(kwargs), keys)
 
     # construct name if not supplied
-    if !haskey(combined, :name) && haskey(combined, :solver_key) && haskey(combined, :problem_key)
-        combined[:name] = combined[:solver_key]*"_"*combined[:problem_key]
+    if !haskey(combined, :name) && haskey(combined, :policy_key) && haskey(combined, :problem_key)
+        combined[:name] = combined[:policy_key]*"_"*combined[:problem_key]
     end
 
     if !haskey(combined, :seeds)
@@ -134,37 +164,29 @@ function Base.run(sets::AbstractVector)
     problemlist = []
     seeds = []
     names = []
-    solver_keys = []
+    policy_keys = []
     problem_keys = []
-    solve_withs = []
     for set in sets
-        solver = set[:solvers][set[:solver_key]] # XXX need to set solver rng!! setrng!(solver, )
-        if isa(solver, Solver)
-            solve_with = set[:problems][set[:solve_with]]
-            policy = solve(solver, solve_with)
-        else
-            policy = solver
-        end
+        policy = set[:policies][set[:policy_key]]
         for i in 1:set[:n]
             push!(problemlist, set[:problems][set[:problem_key]])
             push!(policylist, deepcopy(policy)) # XXX should it just be copy?
             push!(names, set[:name])
-            push!(solver_keys, set[:solver_key])
+            push!(policy_keys, set[:policy_key])
             push!(problem_keys, set[:problem_key])
-            push!(solve_withs, set[:solve_with])
         end
         if haskey(set, :seeds)
             append!(seeds, set[:seeds])
         end
     end
     sim = first(sets)[:simulator]
-    sim.seeds = Nullable{AbstractVector}(seeds)
-    df = simulate(sim, problemlist, policylist)
+    rp = randperm(MersenneTwister(1), length(problemlist))
+    sim.seeds = Nullable{AbstractVector}(seeds[rp])
+    df = simulate(sim, problemlist[rp], policylist[rp])
     df[:set] = names
-    df[:solver_key] = solver_keys
+    df[:policy_key] = policy_keys
     df[:problem_key] = problem_keys
     df[:seed] = seeds
-    df[:solved_with] = solve_withs
     return df
 end
 Base.run(s::SimSet) = run([s])
@@ -172,13 +194,7 @@ Base.run(s::SimSet) = run([s])
 
 
 function rerun(dfrow, s::SimSet; sim=s[:simulator])
-    solver = s[:solvers][first(dfrow[:solver_key])]
-    if isa(solver, Solver)
-        solve_with = s[:problems][s[:solve_with]]
-        policy = solve(solver, solve_with)
-    else
-        policy = solver
-    end
+    policy = s[:policies][first(dfrow[:policy_key])]
     problem = s[:problems][first(dfrow[:problem_key])]
     seed = first(dfrow[:seed])
     return seed_simulate(seed, sim, problem, policy)

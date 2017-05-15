@@ -20,7 +20,7 @@ LowLevelMDP() = LowLevelMDP(0.9,
                             5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
 =#
 LowLevelMDP() = LowLevelMDP(0.9,
-                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
+                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH],
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
@@ -275,12 +275,13 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
       ydot = 0.0
       if rnd < ydotCumProb[1]
-        ydot = 2.0
+        ydot = 2.0  #Move towards desired lane
       elseif rnd < ydotCumProb[2]
-        ydot = 0.0
+        ydot = 0.0  #Keep lane
       else
-        ydot = -2.0
+        ydot = -2.0 #Abort motion to next lane and move to center of current lane
       end
+      print("CurrNode: ",currNode.nodeLabel," lane = $ln targetLane = $targetLane ")
       y = carPhySt.state[2]
 
       target_y = laneCenters[targetLane]
@@ -295,6 +296,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       else
         ydot = 0.0
       end
+      println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
       updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
       nextLane = ln
@@ -412,11 +414,11 @@ function initial_state_distribution(p::LowLevelMDP)
     mean_y = laneCenters[ln]
 
     if abs(ln - egoLane)%2 == 1
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     else
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     end
     push!(probDensity[ln], ldCarDist)
     push!(probDensity[ln], flCarDist)
@@ -437,19 +439,20 @@ function rand(rng::AbstractRNG, d::LowLevelNormalDist)
   for ln in 1:numLanes
     for carProbDensity in d.probDensity[ln]
       rnd = rand(rng)
-      if (rnd > 0.4)
+      if (rnd > 0.0)
         intentionArray = zeros(Float64, numLanes)
-        intentionArray[ln] = 0.6
+        intentionArray[ln] = 0.0
         if ln-1 > 0
-          intentionArray[ln-1] = 0.2
+          intentionArray[ln-1] = 0.5
         else
-          intentionArray[ln] += 0.2
+          intentionArray[ln] += 0.5
         end
         if ln+1 <= numLanes
-          intentionArray[ln+1] = 0.2
+          intentionArray[ln+1] = 0.5
         else
-          intentionArray[ln] += 0.2
+          intentionArray[ln] += 0.5
         end
+        print("Generate: ln = $ln, ")
         carState = randCarLocalISL0(rng, carProbDensity, intentionArray, problem.frameList)
 
         push!(neighborhood[ln], carState)

@@ -1,5 +1,5 @@
 LANE_WIDTH = 4.0
-AVG_GAP = 53.5 #40.24 #Derived from 1.5 second time gap at 60mph
+AVG_GAP = 75.0 #53.5 #From steady state #40.24 #Derived from 1.5 second time gap at 60mph
 AVG_HWY_VELOCITY = 25.0
 VEL_STD_DEV = 2.5
 

@@ -24,10 +24,9 @@ LowLevelMDP() = LowLevelMDP(0.9,
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
-                            5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
+                            50.0, -500.0, 0.0, -3.0, -2.0, -1.0, getFrameList())
 
 discount(p::LowLevelMDP) = p.discount_factor
-isterminal(::LowLevelMDP, act::Int64) = act == length(EgoActionSpace().actions)
 
 function isterminal(p::LowLevelMDP, st::GlobalStateL1)
   st.terminal > 0 ? true : false
@@ -70,9 +69,6 @@ function printState(p::LowLevelMDP, s::GlobalStateL1)
 end
 function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP)
   egoState = gblISL1.ego
-  #=if egoState.absent
-    return true
-  end=#
   y = egoState.state[2]
   if y > p.nbrLaneMarkings[end] || y < p.nbrLaneMarkings[1]
     return true
@@ -85,6 +81,20 @@ function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP)
         return true
       end
     end
+  end
+  return false
+end
+
+function checkTargetCoordinates(gblISL1::GlobalStateL1, p::LowLevelMDP)
+  egoState = gblISL1.ego
+  x = egoState.state[1]
+  y = egoState.state[2]
+  xdot = egoState.state[3]
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
+
+  if (targetLB.state[1] < x) && (x < targetUB.state[1]) && (targetLB.state[2] < y) && (y < targetUB.state[2])
+    return true
   end
   return false
 end
@@ -193,7 +203,7 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
     g = egoState.state[1] - x - CAR_LENGTH
 
     ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
-    if ddotx < -4.0
+    if ddotx < -6.0
       return true
     end
     break # Only interested in car immediately behind ego car.
@@ -265,7 +275,6 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
 
       #Sample action from current node
-      #Next node sampled from current node
       rnd = Base.rand(rng)
       ydotCumProb = [0.0,0.0,0.0]
 
@@ -281,7 +290,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       else
         ydot = -2.0 #Abort motion to next lane and move to center of current lane
       end
-      print("CurrNode: ",currNode.nodeLabel," lane = $ln targetLane = $targetLane ")
+      #print("CurrNode: ",currNode.nodeLabel," cLane = $ln tLane = $targetLane ")
       y = carPhySt.state[2]
 
       target_y = laneCenters[targetLane]
@@ -296,7 +305,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       else
         ydot = 0.0
       end
-      println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
+      #println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
       updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
       nextLane = ln
@@ -314,7 +323,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       edgeLabel = "Undetermined"
       #If reached target
       #println("Target y = ", target_y, " y = ", y, " target lane = ", targetLane, " lane = ", ln)
-      if abs(target_y - y) < LANE_WIDTH/16.0
+      if (abs(target_y - y) < LANE_WIDTH/16.0) && (targetLane == ln) #Second part is important
         edgeLabel = "Reached"
         #else
       elseif targetLane == ln #If already in the targetLane then might as well finish moving to center
@@ -376,7 +385,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
           break
         end
       end
-      #println("CurrNode = ",currNode.nodeLabel," UpdatedNode = ",updatedNode.nodeLabel)
+      #println("cNode = ",currNode.nodeLabel," edgeLabel = ",edgeLabel, " nNode = ",updatedNode.nodeLabel)
       updatedModel = CarModelL0(targetLane, updatedFrame, updatedNode)
       updatedIS = CarLocalISL0(updatedCarPhySt, updatedModel)
       push!(updatedNeighborhood[ln], updatedIS)
@@ -439,18 +448,18 @@ function rand(rng::AbstractRNG, d::LowLevelNormalDist)
   for ln in 1:numLanes
     for carProbDensity in d.probDensity[ln]
       rnd = rand(rng)
-      if (rnd > 0.0)
+      if (rnd > 0.4)
         intentionArray = zeros(Float64, numLanes)
-        intentionArray[ln] = 0.0
+        intentionArray[ln] = 0.4
         if ln-1 > 0
-          intentionArray[ln-1] = 0.5
+          intentionArray[ln-1] = 0.3
         else
-          intentionArray[ln] += 0.5
+          intentionArray[ln] += 0.3
         end
         if ln+1 <= numLanes
-          intentionArray[ln+1] = 0.5
+          intentionArray[ln+1] = 0.3
         else
-          intentionArray[ln] += 0.5
+          intentionArray[ln] += 0.3
         end
         print("Generate: ln = $ln, ")
         carState = randCarLocalISL0(rng, carProbDensity, intentionArray, problem.frameList)
@@ -473,13 +482,13 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
     #println("End generate_s")
     return s
   end
-  if a == length(actionSet.actions)
-    #println("Terminal action generate_s")
-    return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
-  end
+  #If initial state has reached terminal without being marked:
   if checkForCollision(s, p)
     #println("Collision generate_s")
     return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
+  end
+  if checkTargetCoordinates(s,p)
+    return GlobalStateL1(2, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
   #println("Begin update egoState")
@@ -488,29 +497,19 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
   neighborhood = updateNeighborState(s, p, rng)
   #println("End update neighborhood")
   sp = GlobalStateL1(0, egoState, neighborhood)
-  targetLB = p.egoTargetState[1]
-  targetUB = p.egoTargetState[2]
-  if (targetLB.state[1] < egoState.state[1]) && (egoState.state[1] < targetUB.state[1]) && (targetLB.state[2] < egoState.state[2]) && (egoState.state[2] < targetUB.state[2])
-    sp = GlobalStateL1(2, egoState, neighborhood)
-  end
-  #println("End generate_s")
   return sp
 end
 
 #Generate reward
 
-function reward(p::LowLevelMDP, ::GlobalStateL1, a::Int, s::GlobalStateL1)
+function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  # if (s.terminal > 0 )
-  #   #println("End reward")
-  #   return 0.0
-  # end
-  # if a == length(actionSet.actions)
-  #   #println("End reward")
-  #   return p.collisionCost - 5.0  #Just giving it the minimum value. Not sure how MCVI treats the value
-  # end
+  if (s.terminal > 0 )
+    #println("End reward")
+    return 0.0
+  end
 
   reward = 0.0
   egoSt = s.ego
@@ -520,28 +519,23 @@ function reward(p::LowLevelMDP, ::GlobalStateL1, a::Int, s::GlobalStateL1)
     return p.collisionCost
   end
 
-  #Goal defined as a range
-  targetLB = p.egoTargetState[1]
-  targetUB = p.egoTargetState[2]
-  if ((targetLB.state[1] < egoSt.state[1]) && (egoSt.state[1] < targetUB.state[1])
-                  && (targetLB.state[2] < egoSt.state[2]) && (egoSt.state[2] < targetUB.state[2]))
-                  #&& (targetLB.state[3] < egoSt.state[3]) && (egoSt.state[3] < targetUB.state[3]))
+  if checkTargetCoordinates(s,p)
     reward += p.goalReward
+
+    xdot = egoSt.state[3]
+    if (targetLB.state[3] > xdot)
+      reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
+    elseif (xdot > targetUB.state[3])
+      reward += (abs(xdot - targetUB.state[3]) * p.velocityDeviationCost)
+    end
   end
+
   if act.ddot_x <= -4.0
     reward += p.hardbrakingCost
   end
   if check_induced_hardbraking(s, p)
     reward += p.discomfortCost
   end
-
-  xdot = egoSt.state[3]
-  if (targetLB.state[3] > egoSt.state[3])
-    reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
-  elseif (egoSt.state[3] > targetUB.state[3])
-    reward += (abs(xdot - targetUB.state[3]) * p.velocityDeviationCost)
-  end
-
   #println("End reward")
   return reward
 end
@@ -550,8 +544,8 @@ function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRN
   #print("\rBegin generate_sor")
   sp = generate_s(p, s, a, rng)
 
-  # r = reward(p,s,a,rng)
-  r = reward(p, s, a, sp)
+  r = reward(p,s,a,rng)
+  #r = reward(p, s, a, sp)
   #print("\rEnd generate_sor")
   return sp, r
 end
@@ -561,26 +555,6 @@ function initial_state(p::LowLevelMDP, rng::AbstractRNG)
   isd = initial_state_distribution(p)
   #println("End initial_state")
   return rand(rng, isd)
-end
-
-type LowLevelLowerBound
-    rng::AbstractRNG
-end
-
-type LowLevelUpperBound
-    rng::AbstractRNG
-end
-
-function lower_bound(lb::LowLevelLowerBound, p::LowLevelMDP, s::GlobalStateL1)
-    return p.collisionCost
-end
-
-function upper_bound(ub::LowLevelUpperBound, p::LowLevelMDP, s::GlobalStateL1)
-    return p.goalReward
-end
-
-function init_lower_action(p::ChangeLaneRightPOMDP)
-    length(EgoActionSpace())
 end
 
 #Heuristics approach
@@ -635,7 +609,7 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
 
   ddotx = get_idm_accln(lon, xdot, dxdot, g)
 
-  if ddotx < -4.0
+  #=if ddotx < -4.0
     ddotx = -6.0
   elseif ddotx < -1.0
     ddotx = -2.0
@@ -643,7 +617,7 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
     ddotx = 0.0
   else
     ddotx = 2.0
-  end
+  end =#
 
   #Lateral motion determined by target_y and MOBIL
   target_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0

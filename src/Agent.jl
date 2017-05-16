@@ -134,7 +134,7 @@ type EgoActionSpace
   actions::Array{CarAction,1}
 end
 #I am not sure how these function are supposed to work but just adding this line  for good measure
-EgoActionSpace() = EgoActionSpace([CarAction(0.0,0.0), CarAction(0.0,-2.0), CarAction(0.0,2.0), CarAction(-2.0,-2.0), CarAction(-2.0,0.0), CarAction(-2.0,2.0), CarAction(2.0,-2.0), CarAction(2.0,0.0), CarAction(2.0,2.0), CarAction(-6.0,0.0), CarAction(Inf,Inf)])
+EgoActionSpace() = EgoActionSpace([CarAction(0.0,0.0), CarAction(0.0,-2.0), CarAction(0.0,2.0), CarAction(-2.0,-2.0), CarAction(-2.0,0.0), CarAction(-2.0,2.0), CarAction(2.0,-2.0), CarAction(2.0,0.0), CarAction(2.0,2.0), CarAction(-6.0,0.0)])
 
 Base.length(asp::EgoActionSpace) = length(asp.actions)
 iterator(actSpace::EgoActionSpace) = 1:length(actSpace.actions)
@@ -147,6 +147,7 @@ Base.rand(rng::AbstractRNG, asp::EgoActionSpace) = Base.rand(rng, 1:Base.length(
 function isLaneChangeSafe(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysicalState, nextFollowingState::CarPhysicalState)
   tilda_xn_ddot = get_idm_accln(idm, nextFollowingState.state[3], nextFollowingState.state[3] - selfState.state[3], selfState.state[1]-nextFollowingState.state[1]-CAR_LENGTH)
   if tilda_xn_ddot < -mobil.b_safe
+    #println("\tUnsafe: tilda_xn_ddot = $tilda_xn_ddot")
     return false
   end
   return true
@@ -155,6 +156,8 @@ end
 function isLaneChangeSmooth(mobil::MOBILParam, idm::IDMParam, selfState::CarPhysicalState, nextLeadingState::CarPhysicalState, xc_ddot::Float64)
 	tilda_xc_ddot = get_idm_accln(idm, selfState.state[3], selfState.state[3]-nextLeadingState.state[3], nextLeadingState.state[1]-selfState.state[1]-CAR_LENGTH)
   if ((tilda_xc_ddot - xc_ddot) < mobil.a_thr) #Should I add this too? || (tilda_xc_ddot < -mobil.b_safe)
+    #println("\tUnsmooth: tilda_xc_ddot - xc_ddot = $tilda_xc_ddot - $xc_ddot = ", tilda_xc_ddot - xc_ddot, " a_thr = ",mobil.a_thr)
+    #println("\txdot = ",selfState.state[3]," dxdot = ", selfState.state[3],"-",nextLeadingState.state[3], "=", selfState.state[3]-nextLeadingState.state[3], " g = ", nextLeadingState.state[1],"-",selfState.state[1],"-$CAR_LENGTH = ",nextLeadingState.state[1]-selfState.state[1]-CAR_LENGTH)
     return false
   end
   return true

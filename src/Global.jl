@@ -142,7 +142,7 @@ function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDi
   if (targetLane > length(intentionDist))
     targetLane = length(intentionDist)
   end
-  println(" targetLane = ", targetLane)
+  #println(" targetLane = ", targetLane)
   frame = frameList[Base.rand(1:length(frameList))]
   node = frame.policy.nodeSet[1]
 

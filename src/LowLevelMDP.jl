@@ -20,7 +20,7 @@ LowLevelMDP() = LowLevelMDP(0.9,
                             5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
 =#
 LowLevelMDP() = LowLevelMDP(0.9,
-                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH],
+                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
@@ -461,7 +461,7 @@ function rand(rng::AbstractRNG, d::LowLevelNormalDist)
         else
           intentionArray[ln] += 0.3
         end
-        print("Generate: ln = $ln, ")
+        #print("Generate: ln = $ln, ")
         carState = randCarLocalISL0(rng, carProbDensity, intentionArray, problem.frameList)
 
         push!(neighborhood[ln], carState)
@@ -508,26 +508,30 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   act = actionSet.actions[a]
   if (s.terminal > 0 )
     #println("End reward")
+    #println("Reward = ", 0.0)
     return 0.0
   end
 
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
   reward = 0.0
   egoSt = s.ego
   nbrhood = s.neighborhood
   if checkForCollision(s, p)
     #println("End reward")
+    #println("Reward = ",p.collisionCost)
     return p.collisionCost
   end
 
   if checkTargetCoordinates(s,p)
     reward += p.goalReward
+  end
 
-    xdot = egoSt.state[3]
-    if (targetLB.state[3] > xdot)
-      reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
-    elseif (xdot > targetUB.state[3])
-      reward += (abs(xdot - targetUB.state[3]) * p.velocityDeviationCost)
-    end
+  xdot = egoSt.state[3]
+  if (targetLB.state[3] > xdot)
+    reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
+  elseif (xdot > targetUB.state[3])
+    reward += (abs(xdot - targetUB.state[3]) * p.velocityDeviationCost)
   end
 
   if act.ddot_x <= -4.0
@@ -537,6 +541,7 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
     reward += p.discomfortCost
   end
   #println("End reward")
+  #println("Reward = ", reward)
   return reward
 end
 
@@ -608,8 +613,9 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
   end
 
   ddotx = get_idm_accln(lon, xdot, dxdot, g)
+  #println("ddotx = ", ddotx)
 
-  #=if ddotx < -4.0
+  if ddotx < -4.0
     ddotx = -6.0
   elseif ddotx < -1.0
     ddotx = -2.0
@@ -617,7 +623,7 @@ function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
     ddotx = 0.0
   else
     ddotx = 2.0
-  end =#
+  end
 
   #Lateral motion determined by target_y and MOBIL
   target_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0

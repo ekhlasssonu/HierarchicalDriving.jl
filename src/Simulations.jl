@@ -8,6 +8,10 @@ setrng!(o, rng::AbstractRNG) = o #XXX this should be a generated function that t
 function setrng!(p::RandomPolicy, rng::AbstractRNG)
     p.rng = rng
 end
+function setrng!(p::DPWPlanner, rng::AbstractRNG)
+    p.rng = rng
+end
+
 
 # SimResult #
 #############
@@ -47,6 +51,8 @@ PmapSimulator(f::Function, is::Simulator;
               seeds=nothing,
               show_progress=true) = PmapSimulator(f, is, seeds, show_progress)
 simulate(sim::PmapSimulator, args...) = simulate(sim.individual_simulator, args...)
+
+setrng!(s::PmapSimulator, rng::AbstractRNG) = setrng!(s.individual_simulator, rng)
 
 function simulate(sim::PmapSimulator, problems::AbstractVector, policies::AbstractVector, args...)
     @assert length(problems) == length(policies)

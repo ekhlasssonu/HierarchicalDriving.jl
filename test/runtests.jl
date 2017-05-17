@@ -15,7 +15,7 @@ using POMDPModels # for LightDark1d
 #@test 1 == 2
 include("run_random.jl")
 
-#include("run_mcts.jl")
+include("run_mcts.jl")
 
 #include("runMCVI.jl")
 

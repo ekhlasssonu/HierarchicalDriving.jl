@@ -62,11 +62,13 @@ filename = joinpath("data", "compare_$(Dates.format(now(), "E_d_u_HH_MM")).jld")
 println("saving to $filename")
 @save(filename, df, problems, policies)
 
+#=
 using Plots
 # unicodeplots()
 gr()
 histogram(df[:reward])
 gui()
+=#
 
 means = by(df, :policy_key) do df
     DataFrame(reward=mean(df[:reward]), n_steps=mean(df[:n_steps]))

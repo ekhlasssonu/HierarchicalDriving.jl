@@ -4,7 +4,10 @@ function setrng!(sim::HistoryRecorder, rng::AbstractRNG)
     return sim
 end
 # by default do nothing
-setrng!(o, rng::AbstractRNG) = o #XXX this should be a generated function that throws a warning
+@generated function setrng!(o, rng::AbstractRNG)
+    Core.println("WARNING: no implementation of setrng! for $o")
+    return :(return o)
+end
 function setrng!(p::RandomPolicy, rng::AbstractRNG)
     p.rng = rng
 end
@@ -189,10 +192,10 @@ function Base.run(sets::AbstractVector)
     rp = randperm(MersenneTwister(1), length(problemlist))
     sim.seeds = Nullable{AbstractVector}(seeds[rp])
     df = simulate(sim, problemlist[rp], policylist[rp])
-    df[:set] = names
-    df[:policy_key] = policy_keys
-    df[:problem_key] = problem_keys
-    df[:seed] = seeds
+    df[:set] = names[rp]
+    df[:policy_key] = policy_keys[rp]
+    df[:problem_key] = problem_keys[rp]
+    df[:seed] = seeds[rp]
     return df
 end
 Base.run(s::SimSet) = run([s])
@@ -200,7 +203,7 @@ Base.run(s::SimSet) = run([s])
 
 
 function rerun(dfrow, s::SimSet; sim=s[:simulator])
-    policy = s[:policies][first(dfrow[:policy_key])]
+    policy = deepcopy(s[:policies][first(dfrow[:policy_key])])
     problem = s[:problems][first(dfrow[:problem_key])]
     seed = first(dfrow[:seed])
     return seed_simulate(seed, sim, problem, policy)

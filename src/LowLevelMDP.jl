@@ -1,11 +1,13 @@
 type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
   discount_factor::Float64
+  TIME_STEP::Float64
+  HORIZON::Int64
   nbrLaneMarkings::Array{Float64,1} #numLanes + 1 values
   egoStartState::CarPhysicalState
   egoTargetState::NTuple{2, CarPhysicalState} #Two values with lb and ub on target physical state
   goalReward::Float64
   collisionCost::Float64
-  movementCost::Float64
+  steeringCost::Float64
   hardbrakingCost::Float64
   discomfortCost::Float64
   velocityDeviationCost::Float64
@@ -13,18 +15,18 @@ type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
 end
 
 #=
-LowLevelMDP() = LowLevelMDP(0.9,
+LowLevelMDP() = LowLevelMDP(0.9, 0.2, 20,
                             [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
                             CarPhysicalState((0.0, 3.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)), CarPhysicalState((500.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
-                            5.0, -50.0, 0.0, -3.0, -2.0, -0.5, getFrameList())
+                            5.0, -50.0, -1.0, -3.0, -2.0, -0.5, getFrameList())
 =#
-LowLevelMDP() = LowLevelMDP(0.9,
+LowLevelMDP() = LowLevelMDP(0.99, 0.2, 20,
                             [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
-                            50.0, -500.0, 0.0, -3.0, -2.0, -1.0, getFrameList())
+                            50.0, -500.0, -1.0, -3.0, -2.0, -1.0, getFrameList())
 
 discount(p::LowLevelMDP) = p.discount_factor
 
@@ -38,12 +40,12 @@ actions(::LowLevelMDP) = EgoActionSpace()
 n_lanes(p::LowLevelMDP) = length(p.nbrLaneMarkings)-1
 
 function getLaneNo(y::Float64, p::LowLevelMDP)
-  for j = 1:length(p.nbrLaneMarkings)
+  for j = 2:length(p.nbrLaneMarkings)
     if y < p.nbrLaneMarkings[j]
       return j-1
     end
   end
-  return length(p.nbrLaneMarkings)
+  return (length(p.nbrLaneMarkings)-1)
 end
 
 function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
@@ -51,6 +53,13 @@ function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
 
   return getLaneNo(y,p)
 end
+
+function getLaneCenter(phySt::CarPhysicalState, p::LowLevelMDP)
+  laneNo = getLaneNo(phySt, p::LowLevelMDP)
+  laneCenter = mean([p.nbrLaneMarkings[laneNo], p.nbrLaneMarkings[laneNo+1]])
+  return laneCenter
+end
+
 function printState(p::LowLevelMDP, s::GlobalStateL1)
   egoState = s.ego
   egoLane = getLaneNo(egoState, p)
@@ -225,7 +234,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
     println("[updateNeighborState] Incorrect numLanes. ")
   end
   if egoLane < 1 || egoLane > numLanes
-    println("[updateNeighborState] Incorrect egoLane index, $egoLane. ")
+    println("[updateNeighborState] Incorrect egoLane index, $egoLane. $egoState, y = ", egoState.state[2])
   end
   updatedNeighborhood = Array{Array{CarLocalISL0,1},1}(numLanes)
 
@@ -300,13 +309,13 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       end
 
       if target_y != y
-        ydot = min(ydot, abs(target_y - y)/TIME_STEP)
+        ydot = min(ydot, abs(target_y - y)/p.TIME_STEP)
         ydot *= (target_y - y)/abs(target_y - y)  #By convention
       else
         ydot = 0.0
       end
       #println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
-      updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+      updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
       nextLane = ln
       if targetLane > ln
@@ -423,11 +432,11 @@ function initial_state_distribution(p::LowLevelMDP)
     mean_y = laneCenters[ln]
 
     if abs(ln - egoLane)%2 == 1
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     else
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/12.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     end
     push!(probDensity[ln], ldCarDist)
     push!(probDensity[ln], flCarDist)
@@ -491,9 +500,9 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
     return GlobalStateL1(2, CarPhysicalState(s.ego.state), s.neighborhood)
   end
 
-  #println("Begin update egoState")
-  egoState = propagateCar(s.ego, act, TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
-  #println("End update egoState. Begin update neighborhood")
+  #println("Begin update egoState", s.ego)
+  egoState = propagateCar(s.ego, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+  #println("End update egoState $egoState. Begin update neighborhood")
   neighborhood = updateNeighborState(s, p, rng)
   #println("End update neighborhood")
   sp = GlobalStateL1(0, egoState, neighborhood)
@@ -540,6 +549,13 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   if check_induced_hardbraking(s, p)
     reward += p.discomfortCost
   end
+
+  #Penalize for deviating from lane center
+  currLaneCenter = getLaneCenter(egoSt, p)
+
+
+  reward += p.steeringCost * (abs(currLaneCenter - egoSt.state[2]))
+
   #println("End reward")
   #println("Reward = ", reward)
   return reward

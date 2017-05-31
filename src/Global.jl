@@ -10,7 +10,7 @@ TRN_NOISE_Y = 0.0
 TRN_NOISE_XDOT = 0.1
 
 #POMDP parameters
-TIME_STEP = 0.2
+TIME_STEP = 0.5
 
 #Sampling initial state distributions
 #Origin (x -> start location of ego vehicle), (y -> dividing line), (\dot(x) -> 25 mps)

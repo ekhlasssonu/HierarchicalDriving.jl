@@ -7,12 +7,12 @@ using JLD
 
 @everywhere using POMDPToolbox
 
-mdp = LowLevelMDP(0.9,
+mdp = LowLevelMDP(0.99, 0.2,
                   [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
                   CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                   (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                    CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
-                  50.0, -500.0, 0.0, -3.0, -2.0, -1.0, HierarchicalDriving.getFrameList())
+                  50.0, -500.0, -1.0, -3.0, -2.0, -1.0, HierarchicalDriving.getFrameList())
 
 heur = subintentional_policy(mdp)
 
@@ -20,9 +20,9 @@ policies = Dict{String, Policy}(
     "random" => RandomPolicy(mdp),
     "heuristic" => heur,
     "mcts" => begin
-        solver = DPWSolver(depth=40,
+        solver = DPWSolver(depth=20,
                            exploration_constant=10.0,
-                           n_iterations=10_000,
+                           n_iterations=1_000,
                            k_action=5.0,
                            alpha_action=1/10,
                            k_state=5.0,
@@ -46,7 +46,7 @@ end # do block defines what to do with the simulation result. Should be a collec
 s = SimSet(problems=problems,
            policies=policies,
            simulator=sim,
-           n=1
+           n=1_000
           )
 # basically just a dict holding options
 

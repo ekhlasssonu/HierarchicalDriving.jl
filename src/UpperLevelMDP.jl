@@ -1,6 +1,6 @@
-type UpperLevelState
+type OccupancyGridState
   egoLane::UInt64
-  egoCell::UInt64
+  egoDistance::UInt64
   egoVelocity::Float64             #To compute next state, noisy.
   leadVehicleState::UInt64
   ltCellState::NTuple(3,UInt64)

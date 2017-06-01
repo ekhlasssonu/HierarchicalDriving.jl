@@ -3,7 +3,6 @@ using Base.Test
 
 using Base.Test
 using POMDPs
-using GenerativeModels
 
 using MCTS
 # using MCVI
@@ -15,8 +14,10 @@ using POMDPModels # for LightDark1d
 #@test 1 == 2
 include("run_random.jl")
 
-include("run_mcts.jl")
-
 #include("runMCVI.jl")
+
+include("run_single_agent_grid.jl")
+
+include("run_mcts.jl")
 
 #@test test_solve_right()

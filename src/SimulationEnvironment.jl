@@ -1,5 +1,4 @@
 type SimEnvironmentState
-  roadSegment::RoadSegment
   egoState::CarPhysicalState
   oa_list::Array{Array{CarLocalISL0,1},1}
 end

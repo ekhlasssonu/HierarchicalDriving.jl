@@ -2,7 +2,7 @@ type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
   discount_factor::Float64
   TIME_STEP::Float64
   HORIZON::Int64
-  nbrLaneMarkings::Array{Float64,1} #numLanes + 1 values
+  roadSegment::RoadSegment #numLanes + 1 values
   egoStartState::CarPhysicalState
   egoTargetState::NTuple{2, CarPhysicalState} #Two values with lb and ub on target physical state
   goalReward::Float64
@@ -22,7 +22,7 @@ LowLevelMDP() = LowLevelMDP(0.9, 0.2, 20,
                             5.0, -50.0, -1.0, -3.0, -2.0, -0.5, getFrameList())
 =#
 LowLevelMDP() = LowLevelMDP(0.99, 0.2, 20,
-                            [0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH],
+                            RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH]),
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
@@ -37,27 +37,20 @@ end
 n_actions(p::LowLevelMDP) = length(actions(p))
 actions(::LowLevelMDP) = EgoActionSpace()
 
-n_lanes(p::LowLevelMDP) = length(p.nbrLaneMarkings)-1
+n_lanes(p::LowLevelMDP) = length(p.roadSegment.laneMarkings)-1
 
 function getLaneNo(y::Float64, p::LowLevelMDP)
-  for j = 2:length(p.nbrLaneMarkings)
-    if y < p.nbrLaneMarkings[j]
-      return j-1
-    end
-  end
-  return (length(p.nbrLaneMarkings)-1)
+  return getLaneNo(y, p.roadSegment)
 end
 
 function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
   y = phySt.state[2]
-
   return getLaneNo(y,p)
 end
 
 function getLaneCenter(phySt::CarPhysicalState, p::LowLevelMDP)
-  laneNo = getLaneNo(phySt, p::LowLevelMDP)
-  laneCenter = mean([p.nbrLaneMarkings[laneNo], p.nbrLaneMarkings[laneNo+1]])
-  return laneCenter
+  laneNo = getLaneNo(phySt, p)
+  return getLaneCenter(p.roadSegment, laneNo)
 end
 
 function printState(p::LowLevelMDP, s::GlobalStateL1)
@@ -79,7 +72,7 @@ end
 function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP)
   egoState = gblISL1.ego
   y = egoState.state[2]
-  if y > p.nbrLaneMarkings[end] || y < p.nbrLaneMarkings[1]
+  if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
     return true
   end
   nbrhood = gblISL1.neighborhood
@@ -148,7 +141,7 @@ function sortbyx(cars_in_the_lane::Array{CarLocalISL0,1})
   =#
   return sorted
 end
-function sortbylane(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
+function sortintolanes(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
   numLanes = length(neighborhood)
   sorted = Array{Array{CarLocalISL0,1},1}(numLanes)
 
@@ -179,7 +172,7 @@ function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLe
     println("[sortNeighborhood] Incorrect number of lanes.")
   end
 
-  sorted = sortbylane(neighborhood, p)
+  sorted = sortintolanes(neighborhood, p)
 
   for ln in 1:numLanes
     sorted[ln] = sortbyx(sorted[ln])
@@ -189,8 +182,8 @@ end
 
 function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
   laneCenters = []
-  for ln in 2:length(p.nbrLaneMarkings)
-    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  for ln in 2:length(p.roadSegment.laneMarkings)
+    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
   end
 
   egoState = globalISL1.ego
@@ -223,8 +216,8 @@ end
 
 function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
   laneCenters = []
-  for ln in 2:length(p.nbrLaneMarkings)
-    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  for ln in 2:length(p.roadSegment.laneMarkings)
+    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
   end
 
   egoState = globalISL1.ego
@@ -423,8 +416,8 @@ function initial_state_distribution(p::LowLevelMDP)
   probDensity = Array{Array{NTuple{3, NormalDist},1},1}(numLanes)
 
   laneCenters = []
-  for ln in 2:length(p.nbrLaneMarkings)
-    push!(laneCenters, (p.nbrLaneMarkings[ln]+p.nbrLaneMarkings[ln-1])/2.0)
+  for ln in 2:length(p.roadSegment.laneMarkings)
+    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
   end
 
   for ln in 1:numLanes

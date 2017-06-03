@@ -9,6 +9,11 @@ abstract State
 abstract Frame
 abstract Model #Associated with a Frame and contains a belief/node of the controller
 
+abstract CarState <: State
+abstract CarFrame <: Frame
+abstract CarModel <: Model
+
+
 type CarAction <: Action
   ddot_x::Float64
   dot_y::Float64
@@ -18,20 +23,22 @@ Base.hash(a1::CarAction, h::UInt64=zero(UInt64)) = hash(a1.ddot_x, hash(a1.dot_y
 Base.copy(a1::CarAction) = CarAction(a1.ddot_x, a1.dot_y)
 
 
-type CarPhysicalState <: State
+type CarPhysicalState <: CarState
   #absent::Bool
   state::NTuple{3,Float64} #<x, y, \dot{x} >.
 end
 #CarPhysicalState(state::NTuple{3,Float64}) = CarPhysicalState(false, state)
 CarPhysicalState(st::CarPhysicalState) = CarPhysicalState(st.state)
 ==(s1::CarPhysicalState, s2::CarPhysicalState) = (s1.state == s2.state)
+>(s1::CarPhysicalState, s2::CarPhysicalState) = (s1.state[1] > s2.state[2])
+<(s1::CarPhysicalState, s2::CarPhysicalState) = (s1.state[1] < s2.state[2])
 Base.hash(s::CarPhysicalState, h::UInt64=zero(UInt64)) = hash(s.state,h)
 Base.copy(s::CarPhysicalState) = CarPhysicalState(s.state)
 
 collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH)
 
 
-type CarFrameL0 <: Frame
+type CarFrameL0 <: CarFrame
   longitudinal::IDMParam
   lateral::MOBILParam
   policy::FSM{Int64, Float64, String} #Edge label is string for now
@@ -43,7 +50,7 @@ CarFrameL0(long::IDMParam, lat::MOBILParam, pol::FSM{Int64, Float64, String}) = 
 Base.hash(f::CarFrameL0, h::UInt64=zero(UInt64)) = hash(f.longitudinal, hash(f.lateral, hash(f.policy, hash(f.carLength, hash(f.carWidth, h)))))
 Base.copy(f::CarFrameL0) = CarFrameL0(f.longitudinal, f.lateral, f.policy, f.carLength, f.carWidth)
 
-type CarModelL0 <: Model
+type CarModelL0 <: CarModel
   targetLane::Int64
   frame::CarFrameL0
   currNode::FSM_Node{Int64} #Node in car's policy FSM, equivalent to belief

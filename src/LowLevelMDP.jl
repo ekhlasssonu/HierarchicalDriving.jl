@@ -11,7 +11,7 @@ type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
   hardbrakingCost::Float64
   discomfortCost::Float64
   velocityDeviationCost::Float64
-  frameList::Array{CarFrameL0,1}
+  frameList::Array{LowLevelCarFrameL0,1}
 end
 
 #=
@@ -30,7 +30,7 @@ LowLevelMDP() = LowLevelMDP(0.99, 0.2, 20,
 
 discount(p::LowLevelMDP) = p.discount_factor
 
-function isterminal(p::LowLevelMDP, st::GlobalStateL1)
+function isterminal(p::LowLevelMDP, st::GlobalStateL1{CarLocalIS{LowLevelCarModelL0}})
   st.terminal > 0 ? true : false
 end
 #From actions
@@ -101,8 +101,8 @@ function checkTargetCoordinates(gblISL1::GlobalStateL1, p::LowLevelMDP)
   return false
 end
 
-function sortbyx(cars_in_the_lane::Array{CarLocalISL0,1})
-  sorted = Array{CarLocalISL0,1}()
+function sortbyx(cars_in_the_lane::Array{CarLocalIS,1})
+  sorted = Array{CarLocalIS,1}()
   #=
   print("Unsorted: ")
   for carIS in cars_in_the_lane
@@ -141,12 +141,12 @@ function sortbyx(cars_in_the_lane::Array{CarLocalISL0,1})
   =#
   return sorted
 end
-function sortintolanes(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
+function sortintolanes(neighborhood::Array{Array{CarLocalIS,1},1}, p::LowLevelMDP)
   numLanes = length(neighborhood)
-  sorted = Array{Array{CarLocalISL0,1},1}(numLanes)
+  sorted = Array{Array{CarLocalIS,1},1}(numLanes)
 
   for ln in 1:numLanes
-    sorted[ln] = Array{CarLocalISL0,1}()
+    sorted[ln] = Array{CarLocalIS,1}()
   end
   for ln in 1:numLanes
     for carIS in neighborhood[ln]
@@ -166,7 +166,7 @@ function sortintolanes(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevel
   return sorted
 end
 
-function sortNeighborhood(neighborhood::Array{Array{CarLocalISL0,1},1}, p::LowLevelMDP)
+function sortNeighborhood(neighborhood::Array{Array{CarLocalIS,1},1}, p::LowLevelMDP)
   numLanes = length(neighborhood)
   if numLanes != n_lanes(p)
     println("[sortNeighborhood] Incorrect number of lanes.")
@@ -198,13 +198,13 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
     if carPhySt.state[1] > egoState.state[1]  #Not interested in cars ahead of the ego vehicle
       continue
     end
-    carModel = carIS.modelL0
+    carModel = carIS.model
     x = carPhySt.state[1]
     xdot = carPhySt.state[3]
     dxdot = xdot - egoState.state[3]
     g = egoState.state[1] - x - CAR_LENGTH
 
-    ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+    ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
     if ddotx < -6.0
       return true
     end
@@ -229,18 +229,18 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
   if egoLane < 1 || egoLane > numLanes
     println("[updateNeighborState] Incorrect egoLane index, $egoLane. $egoState, y = ", egoState.state[2])
   end
-  updatedNeighborhood = Array{Array{CarLocalISL0,1},1}(numLanes)
+  updatedNeighborhood = Array{Array{CarLocalIS,1},1}(numLanes)
 
   for ln in 1:numLanes #For every lane
     numCars = length(globalISL1.neighborhood[ln])
-    updatedNeighborhood[ln] = Array{CarLocalISL0,1}()
-    ldCarIS = Nullable{CarLocalISL0}()
+    updatedNeighborhood[ln] = Array{CarLocalIS,1}()
+    ldCarIS = Nullable{CarLocalIS}()
     for carIdx in 1:numCars #For every car in the lane
       carIS = globalISL1.neighborhood[ln][carIdx] #Initial IS of the current car under consideration
       #carAct = actions[ln][carIdx] #action performed by current car
 
       carPhySt = carIS.physicalState
-      carModel = carIS.modelL0
+      carModel = carIS.model
       carFrame = carModel.frame
       targetLane = carModel.targetLane
       currNode = carModel.currNode
@@ -274,7 +274,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
         end
       end
 
-      ddotx = get_idm_accln(carIS.modelL0.frame.longitudinal, xdot, dxdot, g)
+      ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
 
       #Sample action from current node
       rnd = Base.rand(rng)
@@ -388,8 +388,8 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
         end
       end
       #println("cNode = ",currNode.nodeLabel," edgeLabel = ",edgeLabel, " nNode = ",updatedNode.nodeLabel)
-      updatedModel = CarModelL0(targetLane, updatedFrame, updatedNode)
-      updatedIS = CarLocalISL0(updatedCarPhySt, updatedModel)
+      updatedModel = LowLevelCarModelL0(targetLane, updatedFrame, updatedNode)
+      updatedIS = CarLocalIS(updatedCarPhySt, updatedModel)
       push!(updatedNeighborhood[ln], updatedIS)
 
       ldCarIS = carIS
@@ -441,10 +441,10 @@ function rand(rng::AbstractRNG, d::LowLevelNormalDist)
   problem = d.problem
   egoState = problem.egoStartState
   numLanes = n_lanes(problem)
-  neighborhood = Array{Array{CarLocalISL0,1}}(numLanes)
+  neighborhood = Array{Array{CarLocalIS,1}}(numLanes)
 
   for i in 1:numLanes
-    neighborhood[i] = Array{CarLocalISL0,1}()
+    neighborhood[i] = Array{CarLocalIS,1}()
   end
 
   for ln in 1:numLanes
@@ -573,7 +573,7 @@ end
 
 #Heuristics approach
 type subintentional_policy <: Policy
-  egoFrame::CarFrameL0
+  egoFrame::LowLevelCarFrameL0
   problem::LowLevelMDP
 end
 
@@ -581,7 +581,7 @@ function subintentional_policy(p::LowLevelMDP)
   fsm = createFSM()
   idmNormal = createIDM_normal()
   mobilNormal = createMOBIL_normal()
-  egoFrame = CarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
+  egoFrame = LowLevelCarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
 
   return subintentional_policy(egoFrame, p)
 end

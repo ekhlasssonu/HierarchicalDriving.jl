@@ -35,12 +35,12 @@ function sample(rng::AbstractRNG, ud::UniformDist)
 end
 
 #State of world. Should work for upper level as well.
-type GlobalStateL1
+type GlobalStateL1{C <: CarLocalIS}
   terminal::Int64 #0 for not terminal, 1 for collision, 2 for success
   ego::CarPhysicalState
-  neighborhood::Array{Array{CarLocalISL0,1},1}  #In order  of lane no. and x position
+  neighborhood::Array{Array{C,1},1}  #In order  of lane no. and x position
 end
-GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1}) = GlobalStateL1(0, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalISL0,1},1})
+GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1})
 ==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.terminal == s2.terminal) && (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
 Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.terminal, hash(s1.ego, hash(s1.neighborhood, h)))
 Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.terminal, s1.ego, s1.neighborhood)
@@ -122,7 +122,7 @@ function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist})
   return (CarPhysicalState((x,y,xdot)))
 end
 
-function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDist::Array{Float64,1}, frameList::Array{CarFrameL0,1})
+function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDist::Array{Float64,1}, frameList::Array{LowLevelCarFrameL0,1})
   phySt = randCarPhysicalState(rng, d)
   cumProbDist = cumsum(intentionDist)
   #=for i in intentionDist
@@ -146,7 +146,7 @@ function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDi
   frame = frameList[Base.rand(rng, 1:length(frameList))]
   node = frame.policy.nodeSet[1]
 
-  localISL0 = CarLocalISL0(phySt, CarModelL0(targetLane, frame, node))
+  localISL0 = CarLocalIS{LowLevelCarModelL0}(phySt, LowLevelCarModelL0(targetLane, frame, node))
   return localISL0
 end
 

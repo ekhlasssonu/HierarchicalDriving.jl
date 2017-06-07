@@ -14,14 +14,14 @@ function show{AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{LowLeve
     mdp = t[1]
     s = t[2]
     scene = convert(Scene, s)
-    n_lanes = length(mdp.nbrLaneMarkings)-1
+    n_lanes = length(mdp.roadSegment.laneMarkings)-1
 
     es = s.ego.state
     # origin is center of rightmost lane
     roadway = gen_straight_roadway(n_lanes,
                                    es[1]+1000.0,
-                                   lane_widths=diff(mdp.nbrLaneMarkings),
-                                   origin=VecSE2(es[1]-500.0, mean(mdp.nbrLaneMarkings[1:2]), 0.0),
+                                   lane_widths=diff(mdp.roadSegment.laneMarkings),
+                                   origin=VecSE2(es[1]-500.0, mean(mdp.roadSegment.laneMarkings[1:2]), 0.0),
                                   )
     # cam = FitToContentCamera(0.1)
     cam = SceneFollowCamera(6.0) # second number is pixels per meter

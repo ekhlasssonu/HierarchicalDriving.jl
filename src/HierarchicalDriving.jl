@@ -37,6 +37,7 @@ include("Global.jl")
 include("LowLevelMDP.jl")
 include("SingleAgentGridMDP.jl")
 include("Simulations.jl")
+include("SimulationEnvironment.jl")
 include("Visualization.jl")
 
 end # module

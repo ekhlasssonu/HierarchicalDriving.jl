@@ -15,7 +15,7 @@ function step(s::CarState{}, g::GlobalState, physical::PhysicalParameter)
 end
 
 type GlobalState{C<:CarState}
-    cars::Vector{C}    
+    cars::Vector{C}
     neighborhoods::Nullable{Vector{Neighborhood}}
 end
 
@@ -41,23 +41,23 @@ end
 
 
 immutable CarFilter
-    
+
 end
 
 immutable NeighborhoodFilter
 
 end
 
-function update(f::CarFilter, b::ParticleCollection{CarLocalISL0}, o)
+function update(f::CarFilter, b::ParticleCollection{CarLocalIS}, o)
     # see ParticleFilters.jl
 end
 
-function update(f::NeighborhoodFilter, b::Vector{ParticleCollection{CarLocalISL0}}, a::Int, o::Vect{PhysicalState})
+function update(f::NeighborhoodFilter, b::Vector{ParticleCollection{CarLocalIS}}, a::Int, o::Vect{PhysicalState})
 
 end
 
-function rand(rng, b::Vector{ParticleCollection{CarLocalISL0}})
-    cars = Array(CarLocalISL0, length(b))
+function rand(rng, b::Vector{ParticleCollection{CarLocalIS}})
+    cars = Array(CarLocalIS, length(b))
     for i in 1:length(b)
         cars[i] = rand(rng, b[i])
     end

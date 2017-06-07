@@ -20,6 +20,7 @@ function getLaneCenter(rs::RoadSegment, ln::Int64)
 end
 
 
+
 #=
 type Roadway
   segments::Array{RoadSegment,1}

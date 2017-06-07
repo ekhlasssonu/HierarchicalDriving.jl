@@ -9,9 +9,12 @@ abstract State
 abstract Frame
 abstract Model #Associated with a Frame and contains a belief/node of the controller
 
+abstract LocalIS
 abstract CarState <: State
 abstract CarFrame <: Frame
 abstract CarModel <: Model
+
+
 
 
 type CarAction <: Action
@@ -38,37 +41,45 @@ Base.copy(s::CarPhysicalState) = CarPhysicalState(s.state)
 collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH)
 
 
-type CarFrameL0 <: CarFrame
+type LowLevelCarFrameL0 <: CarFrame
   longitudinal::IDMParam
   lateral::MOBILParam
   policy::FSM{Int64, Float64, String} #Edge label is string for now
   carLength::Float64
   carWidth::Float64
 end
-CarFrameL0(long::IDMParam, lat::MOBILParam, pol::FSM{Int64, Float64, String}) = CarFrameL0(long, lat, pol, CAR_LENGTH, CAR_WIDTH)
-==(f1::CarFrameL0, f2::CarFrameL0) = (f1.longitudinal == f2.longitudinal) && (f1.lateral == f2.lateral) && (f1.policy == f2.policy) && (f1.carLength == f2.carLength) && (f1.carWidth == f2.carWidth)
-Base.hash(f::CarFrameL0, h::UInt64=zero(UInt64)) = hash(f.longitudinal, hash(f.lateral, hash(f.policy, hash(f.carLength, hash(f.carWidth, h)))))
-Base.copy(f::CarFrameL0) = CarFrameL0(f.longitudinal, f.lateral, f.policy, f.carLength, f.carWidth)
+LowLevelCarFrameL0(long::IDMParam, lat::MOBILParam, pol::FSM{Int64, Float64, String}) = LowLevelCarFrameL0(long, lat, pol, CAR_LENGTH, CAR_WIDTH)
+==(f1::LowLevelCarFrameL0, f2::LowLevelCarFrameL0) = (f1.longitudinal == f2.longitudinal) && (f1.lateral == f2.lateral) && (f1.policy == f2.policy) && (f1.carLength == f2.carLength) && (f1.carWidth == f2.carWidth)
+Base.hash(f::LowLevelCarFrameL0, h::UInt64=zero(UInt64)) = hash(f.longitudinal, hash(f.lateral, hash(f.policy, hash(f.carLength, hash(f.carWidth, h)))))
+Base.copy(f::LowLevelCarFrameL0) = LowLevelCarFrameL0(f.longitudinal, f.lateral, f.policy, f.carLength, f.carWidth)
 
-type CarModelL0 <: CarModel
+type LowLevelCarModelL0 <: CarModel
   targetLane::Int64
-  frame::CarFrameL0
+  frame::LowLevelCarFrameL0
   currNode::FSM_Node{Int64} #Node in car's policy FSM, equivalent to belief
 end
-==(m1::CarModelL0, m2::CarModelL0) = (m1.targetLane == m2.targetLane) && (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
-Base.hash(m::CarModelL0, h::UInt64=zero(UInt64)) = hash(m.targetLane, hash(m.frame, hash(m.currNode, h)))
-Base.copy(m::CarModelL0) = CarModelL0(m.targetLane, m.frame, m.currNode)
+==(m1::LowLevelCarModelL0, m2::LowLevelCarModelL0) = (m1.targetLane == m2.targetLane) && (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
+Base.hash(m::LowLevelCarModelL0, h::UInt64=zero(UInt64)) = hash(m.targetLane, hash(m.frame, hash(m.currNode, h)))
+Base.copy(m::LowLevelCarModelL0) = LowLevelCarModelL0(m.targetLane, m.frame, m.currNode)
 
-type CarLocalISL0
-  physicalState::CarPhysicalState
-  modelL0::CarModelL0
+type UpperLevelCarModelL0 <: CarModel
+  frame::LowLevelCarFrameL0
+  currNode::FSM_Node{Int64}
 end
-==(is1::CarLocalISL0, is2::CarLocalISL0) = (is1.physicalState == is2.physicalState) && (is1.modelL0 == is2.modelL0)
-Base.hash(is::CarLocalISL0, h::UInt64=zero(UInt64)) = hash(is.physicalState, hash(is.modelL0, h))
-Base.copy(is::CarLocalISL0) = CarLocalISL0(is.physicalState, is.modelL0)
+==(m1::UpperLevelCarModelL0, m2::UpperLevelCarModelL0) = (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
+Base.hash(m::UpperLevelCarModelL0, h::UInt64=zero(UInt64)) = hash(m.frame, hash(m.currNode, h))
+Base.copy(m::UpperLevelCarModelL0) = UpperLevelCarModelL0(m.frame, m.currNode)
 
-collision(s1::CarPhysicalState, is2::CarLocalISL0) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.modelL0.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.modelL0.frame.carWidth)/2)
-collision(is1::CarLocalISL0, is2::CarLocalISL0) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.modelL0.frame.carLength + is2.modelL0.frame.carLength)/2) && (abs(is1.physicalState.state[2] - is2.physicalState.state[2]) < (is1.modelL0.frame.carWidth + is2.modelL0.frame.carWidth)/2)
+type CarLocalIS{M <: CarModel}
+  physicalState::CarPhysicalState
+  model::M
+end
+==(is1::CarLocalIS, is2::CarLocalIS) = (is1.physicalState == is2.physicalState) && (is1.model == is2.model)
+Base.hash(is::CarLocalIS, h::UInt64=zero(UInt64)) = hash(is.physicalState, hash(is.model, h))
+Base.copy(is::CarLocalIS) = CarLocalIS(is.physicalState, is.model)
+
+collision(s1::CarPhysicalState, is2::CarLocalIS) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.model.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.model.frame.carWidth)/2)
+collision(is1::CarLocalIS, is2::CarLocalIS) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.model.frame.carLength + is2.model.frame.carLength)/2) && (abs(is1.physicalState.state[2] - is2.physicalState.state[2]) < (is1.model.frame.carWidth + is2.model.frame.carWidth)/2)
 
 #ddot_x is determined by IDM, Only for dot_y
 function createFSM()
@@ -116,23 +127,23 @@ function createFSM()
 end
 
 function getFrameList()
-  frameList = Array{CarFrameL0,1}(3)
+  frameList = Array{LowLevelCarFrameL0,1}(3)
 
     fsm = createFSM()
     #TimidFrame
     idmTimid = createIDM_timid()
     mobilTimid = createMOBIL_timid()
-    frameList[1] = CarFrameL0(idmTimid, mobilTimid, fsm, CAR_LENGTH, CAR_WIDTH)
+    frameList[1] = LowLevelCarFrameL0(idmTimid, mobilTimid, fsm, CAR_LENGTH, CAR_WIDTH)
 
     #NormalFrame
     idmNormal = createIDM_normal()
     mobilNormal = createMOBIL_normal()
-    frameList[2] = CarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
+    frameList[2] = LowLevelCarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
 
     #AggressiveFrame
     idmAggressive = createIDM_aggressive()
     mobilAggressive = createMOBIL_aggressive()
-    frameList[3] = CarFrameL0(idmAggressive, mobilAggressive, fsm, CAR_LENGTH, CAR_WIDTH)
+    frameList[3] = LowLevelCarFrameL0(idmAggressive, mobilAggressive, fsm, CAR_LENGTH, CAR_WIDTH)
 
   return frameList
 end

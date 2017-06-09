@@ -30,7 +30,7 @@ LowLevelMDP() = LowLevelMDP(0.99, 0.2, 20,
 
 discount(p::LowLevelMDP) = p.discount_factor
 
-function isterminal(p::LowLevelMDP, st::GlobalStateL1{CarLocalIS{LowLevelCarModelL0}})
+function isterminal(p::LowLevelMDP, st::GlobalStateL1{CarLocalIS{ParamCarModelL0}})
   st.terminal > 0 ? true : false
 end
 #From actions
@@ -181,10 +181,7 @@ function sortNeighborhood(neighborhood::Array{Array{CarLocalIS,1},1}, p::LowLeve
 end
 
 function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
-  laneCenters = []
-  for ln in 2:length(p.roadSegment.laneMarkings)
-    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
-  end
+  laneCenters = getLaneCenters(p.roadSegment)
 
   egoState = globalISL1.ego
   egoLane = getLaneNo(egoState, p)
@@ -215,10 +212,7 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
 end
 
 function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG)
-  laneCenters = []
-  for ln in 2:length(p.roadSegment.laneMarkings)
-    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
-  end
+  laneCenters = getLaneCenters(p.roadSegment)
 
   egoState = globalISL1.ego
   egoLane = getLaneNo(egoState,p)
@@ -388,7 +382,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
         end
       end
       #println("cNode = ",currNode.nodeLabel," edgeLabel = ",edgeLabel, " nNode = ",updatedNode.nodeLabel)
-      updatedModel = LowLevelCarModelL0(targetLane, updatedFrame, updatedNode)
+      updatedModel = ParamCarModelL0(targetLane, updatedFrame, updatedNode)
       updatedIS = CarLocalIS(updatedCarPhySt, updatedModel)
       push!(updatedNeighborhood[ln], updatedIS)
 
@@ -401,7 +395,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
 end
 
-type LowLevelNormalDist
+type CarNormalDist
   problem::LowLevelMDP
   probDensity::Array{Array{NTuple{3, NormalDist},1},1}   #2D array of normal distribution
 end
@@ -412,13 +406,9 @@ function initial_state_distribution(p::LowLevelMDP)
   ego_x = egoState.state[1]
   egoLane = getLaneNo(egoState, p)
 
-  maxCars = 2 * ones(UInt64, numLanes)
   probDensity = Array{Array{NTuple{3, NormalDist},1},1}(numLanes)
 
-  laneCenters = []
-  for ln in 2:length(p.roadSegment.laneMarkings)
-    push!(laneCenters, (p.roadSegment.laneMarkings[ln]+p.roadSegment.laneMarkings[ln-1])/2.0)
-  end
+  laneCenters = getLaneCenters(p.roadSegment)
 
   for ln in 1:numLanes
     probDensity[ln] = Array{NTuple{3, NormalDist},1}()
@@ -434,10 +424,10 @@ function initial_state_distribution(p::LowLevelMDP)
     push!(probDensity[ln], ldCarDist)
     push!(probDensity[ln], flCarDist)
   end
-  return LowLevelNormalDist(p, probDensity)
+  return CarNormalDist(p, probDensity)
 end
 
-function rand(rng::AbstractRNG, d::LowLevelNormalDist)
+function rand(rng::AbstractRNG, d::CarNormalDist)
   problem = d.problem
   egoState = problem.egoStartState
   numLanes = n_lanes(problem)

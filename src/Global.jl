@@ -40,10 +40,11 @@ type GlobalStateL1{C <: CarLocalIS}
   ego::CarPhysicalState
   neighborhood::Array{Array{C,1},1}  #In order  of lane no. and x position
 end
-GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1})
+GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego, neighborhood)
 ==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.terminal == s2.terminal) && (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
 Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.terminal, hash(s1.ego, hash(s1.neighborhood, h)))
 Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.terminal, s1.ego, s1.neighborhood)
+#GlobalStateL1{CarLocalIS{ParamCarModelL0}}(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS{ParamCarModelL0},1},1}) = GlobalStateL1{CarLocalIS{ParamCarModelL0}}(0, ego, neighborhood)
 
 
 type EgoObservation
@@ -124,29 +125,23 @@ end
 
 function randCarLocalISL0(rng::AbstractRNG, d::NTuple{3,NormalDist}, intentionDist::Array{Float64,1}, frameList::Array{LowLevelCarFrameL0,1})
   phySt = randCarPhysicalState(rng, d)
-  cumProbDist = cumsum(intentionDist)
-  #=for i in intentionDist
-    print(i," ")
-  end
-  println()
-  for i in cumProbDist
-    print(i," ")
-  end
-  println()=#
-  x = Base.rand(rng)
-  #println("x = ", x)
-  targetLane = 1
-  while (targetLane < length(cumProbDist)) && (x > cumProbDist[targetLane])
-    targetLane += 1
-  end
-  if (targetLane > length(intentionDist))
-    targetLane = length(intentionDist)
+  targetLane = 0
+  if length(intentionDist) != 0
+    cumProbDist = cumsum(intentionDist)
+    x = Base.rand(rng)
+    targetLane = 1
+    while (targetLane < length(cumProbDist)) && (x > cumProbDist[targetLane])
+      targetLane += 1
+    end
+    if (targetLane > length(intentionDist))
+      targetLane = length(intentionDist)
+    end
   end
   #println(" targetLane = ", targetLane)
   frame = frameList[Base.rand(rng, 1:length(frameList))]
   node = frame.policy.nodeSet[1]
 
-  localISL0 = CarLocalIS{LowLevelCarModelL0}(phySt, LowLevelCarModelL0(targetLane, frame, node))
+  localISL0 = CarLocalIS{ParamCarModelL0}(phySt, ParamCarModelL0(targetLane, frame, node))
   return localISL0
 end
 

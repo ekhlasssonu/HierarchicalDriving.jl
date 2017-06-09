@@ -19,7 +19,13 @@ function getLaneCenter(rs::RoadSegment, ln::Int64)
   return mean([rs.laneMarkings[ln], rs.laneMarkings[ln+1]])
 end
 
-
+function getLaneCenters(rs::RoadSegment)
+  laneCenters = Array{Float64,1}()
+  for ln in 2:length(rs.laneMarkings)
+    push!(laneCenters, mean(rs.laneMarkings[ln-1:ln]))
+  end
+  return laneCenters
+end
 
 #=
 type Roadway

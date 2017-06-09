@@ -53,14 +53,14 @@ LowLevelCarFrameL0(long::IDMParam, lat::MOBILParam, pol::FSM{Int64, Float64, Str
 Base.hash(f::LowLevelCarFrameL0, h::UInt64=zero(UInt64)) = hash(f.longitudinal, hash(f.lateral, hash(f.policy, hash(f.carLength, hash(f.carWidth, h)))))
 Base.copy(f::LowLevelCarFrameL0) = LowLevelCarFrameL0(f.longitudinal, f.lateral, f.policy, f.carLength, f.carWidth)
 
-type LowLevelCarModelL0 <: CarModel
+type ParamCarModelL0 <: CarModel
   targetLane::Int64
   frame::LowLevelCarFrameL0
   currNode::FSM_Node{Int64} #Node in car's policy FSM, equivalent to belief
 end
-==(m1::LowLevelCarModelL0, m2::LowLevelCarModelL0) = (m1.targetLane == m2.targetLane) && (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
-Base.hash(m::LowLevelCarModelL0, h::UInt64=zero(UInt64)) = hash(m.targetLane, hash(m.frame, hash(m.currNode, h)))
-Base.copy(m::LowLevelCarModelL0) = LowLevelCarModelL0(m.targetLane, m.frame, m.currNode)
+==(m1::ParamCarModelL0, m2::ParamCarModelL0) = (m1.targetLane == m2.targetLane) && (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
+Base.hash(m::ParamCarModelL0, h::UInt64=zero(UInt64)) = hash(m.targetLane, hash(m.frame, hash(m.currNode, h)))
+Base.copy(m::ParamCarModelL0) = ParamCarModelL0(m.targetLane, m.frame, m.currNode)
 
 type UpperLevelCarModelL0 <: CarModel
   frame::LowLevelCarFrameL0

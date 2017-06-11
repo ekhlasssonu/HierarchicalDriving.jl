@@ -395,8 +395,8 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
 end
 
-type CarNormalDist
-  problem::LowLevelMDP
+type CarNormalDist{T <: POMDPs.MDP}
+  problem::T
   probDensity::Array{Array{NTuple{3, NormalDist},1},1}   #2D array of normal distribution
 end
 
@@ -424,10 +424,10 @@ function initial_state_distribution(p::LowLevelMDP)
     push!(probDensity[ln], ldCarDist)
     push!(probDensity[ln], flCarDist)
   end
-  return CarNormalDist(p, probDensity)
+  return CarNormalDist{LowLevelMDP}(p, probDensity)
 end
 
-function rand(rng::AbstractRNG, d::CarNormalDist)
+function rand(rng::AbstractRNG, d::CarNormalDist{LowLevelMDP})
   problem = d.problem
   egoState = problem.egoStartState
   numLanes = n_lanes(problem)
@@ -562,21 +562,21 @@ function initial_state(p::LowLevelMDP, rng::AbstractRNG)
 end
 
 #Heuristics approach
-type subintentional_policy <: Policy
+type subintentional_lowlevel_policy <: Policy
   egoFrame::LowLevelCarFrameL0
   problem::LowLevelMDP
 end
 
-function subintentional_policy(p::LowLevelMDP)
+function subintentional_lowlevel_policy(p::LowLevelMDP)
   fsm = createFSM()
   idmNormal = createIDM_normal()
   mobilNormal = createMOBIL_normal()
   egoFrame = LowLevelCarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
 
-  return subintentional_policy(egoFrame, p)
+  return subintentional_lowlevel_policy(egoFrame, p)
 end
 
-function action(si_policy::subintentional_policy, gblSt::GlobalStateL1)
+function action(si_policy::subintentional_lowlevel_policy, gblSt::GlobalStateL1)
   problem = si_policy.problem
   egoFrame = si_policy.egoFrame
 

@@ -5,13 +5,15 @@ type SimulationMDP <: POMDPs.MDP{GlobalStateL1, Int64}
   roadSegment::RoadSegment
   egoStartState::CarPhysicalState
   egoTargetState::NTuple{2, CarPhysicalState} #Two values with lb and ub on target physical state
+  frameList::Array{LowLevelCarFrameL0,1}
 end
 
 SimulationMDP() = SimulationMDP(0.9, 0.2, 40,
                                   RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH]),
                                   CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                                   (CarPhysicalState((425.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
-                                   CarPhysicalState((500.0, 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))) )
+                                   CarPhysicalState((500.0, 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
+                                  getFrameList() )
 
 discount(p::SimulationMDP) = p.discount_factor
 function isterminal(p::SimulationMDP, st::GlobalStateL1{CarLocalIS{ParamCarModelL0}})
@@ -97,7 +99,7 @@ end
 
 #Return the car leading and following car indices respectively
 function binary_search(cars::Vector{CarLocalIS}, phySt::CarPhysicalState)
-  if length(cars == 0)
+  if length(cars) == 0
     return [0,0]
   end
   car_x = phySt.state[1]
@@ -107,7 +109,7 @@ function binary_search(cars::Vector{CarLocalIS}, phySt::CarPhysicalState)
   trail_x = cars[end].physicalState.state[1]
 
   while trail_idx > lead_idx
-    mid_idx = floor((lead_idx + trail_idx)/2)
+    mid_idx = round(Int, floor((lead_idx+trail_idx)/2))
     if cars[mid_idx].physicalState.state[1] > car_x
       lead_idx = mid_idx+1
     else
@@ -126,18 +128,19 @@ end
 #neighborhood is sorted. Binary search to find the current car index or next leading car index. 0 if the car is the first car
 #Return next leading and next following vehicle position for all lanes
 function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::CarPhysicalState)
-  carLane = getLaneNo(st, p)
+  carLane = getLaneNo(phySt, p)
   egoState = gblSt.ego
   egoLane = getLaneNo(egoState, p)
   car_x = phySt.state[1]
+  numLanes = n_lanes(p)
   imm_neighbor = Array{Array{CarPhysicalState,1},1}(numLanes)
   for ln in 1:n_lanes(p)
     imm_neighbor[ln] = Array{CarPhysicalState,1}()
 
     arr = gblSt.neighborhood[ln]
     if length(arr) == 0  #Empty lane: Add two cars at infinite distance from current car
-      ldr = CarPhysicalState((Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY))
-      trlr = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY))
+      ldr = CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY))
+      trlr = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY))
       push!(imm_neighbor[ln], ldr)
       push!(imm_neighbor[ln], trlr)
     else
@@ -146,14 +149,14 @@ function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::Ca
       trail_idx = nbr_indices[2]
       #Add imm. Leading car
       if lead_idx < 1 #Probably never happens
-        push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY)))
+        push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
       #Lead car can be the same as the current car
       else
         if (arr[lead_idx].physicalState == phySt)
           lead_idx -= 1
         end
         if lead_idx < 1
-          push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY)))
+          push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
         else
           push!(imm_neighbor[ln], arr[lead_idx].physicalState)
         end
@@ -161,13 +164,13 @@ function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::Ca
 
       #Add imm. trailing car
       if length(arr) < trail_idx #Happens when all vehicles are leading (or the same)
-        push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY)))
+        push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
       else
         if (arr[trail_idx].physicalState == phySt)
           trail_idx += 1
         end
         if length(arr) < trail_idx
-          push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, laneNo), AVG_HWY_VELOCITY)))
+          push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
         else
           push!(imm_neighbor[ln], arr[trail_idx].physicalState)
         end
@@ -191,8 +194,15 @@ end
 
 #Code to propagate
 function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
-  carPhySt = is.phySt_st
+  carPhySt = is.physicalState
   carLane = getLaneNo(carPhySt, p)
+  laneCenters = getLaneCenters(p.roadSegment)
+  carModel = is.model
+  targetLane = carModel.targetLane
+  carFrame = carModel.frame
+  currNode = carModel.currNode
+  fsm = carFrame.policy
+
   imm_neighbors = getImmediateNeighbors(gblSt, p, carPhySt)
   # Accln:
   ldrPhySt = imm_neighbors[carLane][1]
@@ -204,12 +214,12 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
   ddot_x = get_idm_accln(is.model.frame.longitudinal, xdot, dxdot, g)
 
-  laneCenters = getLaneCenters(p.roadSegment)
-  carModel = is.model
-  targetLane = carModel.targetLane
-  carFrame = carModel.frame
-  currNode = carModel.currNode
-  fsm = carFrame.policy
+  rnd = Base.rand(rng)
+  ydotCumProb = [0.0,0.0,0.0]
+
+  ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
+  ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
+  ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
 
   ydot = 0.0
   if rnd < ydotCumProb[1]
@@ -225,9 +235,23 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
   #Figure out edge labels
   if targetLane == 0  #TargetLane not fixed yet
+    cgRtPossible = false
+    rtLane = carLane - 1
+    if rtLane > 0 #Lane exists now see if lane change is possible
+      nxtLdPhySt = imm_neighbors[rtLane][1]
+      nxtFlPhySt = imm_neighbors[rtLane][2]
+
+      isSmooth = isLaneChangeSmooth(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtLdPhySt, ddot_x)
+      isSafe = isLaneChangeSafe(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtFlPhySt)
+
+      if isSmooth && isSafe
+        cgRtPossible = true
+      end
+    end
+
     cgLtPossible = false
-    ltLane = carLane - 1
-    if ltLane > 0 #Lane exists now see if lane change is possible
+    ltLane = carLane + 1
+    if ltLane <= n_lanes(p) #Lane exists now see if lane change is possible
       nxtLdPhySt = imm_neighbors[ltLane][1]
       nxtFlPhySt = imm_neighbors[ltLane][2]
 
@@ -238,21 +262,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
         cgLtPossible = true
       end
     end
-
-    cgRtPossible = false
-    rtLane = carLane + 1
-    if rtLane <= n_lanes(p) #Lane exists now see if lane change is possible
-      nxtLdCarPhySt = imm_neighbors[rtLane][1]
-      nxtFlCarPhySt = imm_neighbors[rtLane][2]
-
-      isSmooth = isLaneChangeSmooth(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtLdPhySt, ddot_x)
-      isSafe = isLaneChangeSafe(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtFlPhySt)
-
-      if isSmooth && isSafe
-        cgRtPossible = true
-      end
-    end
-    cgLtPossible ? (cgRtPossible ? ((rand(rng) < 0.5) ? targetLane = ltLane : targetLane = rtLane) : targetLane = ltLane) : (cgRtPossible ? targetLane = rtLane : targetLane = carLane)
+    cgRtPossible ? (cgLtPossible ? ((rand(rng) < 0.5) ? targetLane = rtLane : targetLane = ltLane) : targetLane = rtLane) : (cgRtPossible ? targetLane = ltLane : targetLane = carLane)
     #carModel.targetLane = targetLane #Not needed here
   end
 
@@ -280,8 +290,8 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
       edgeLabel = "SafeSmooth"
     end
   else
-    nxtLdCarPhySt = imm_neighbors[targetLane][1]
-    nxtFlCarPhySt = imm_neighbors[targetLane][2]
+    nxtLdPhySt = imm_neighbors[targetLane][1]
+    nxtFlPhySt = imm_neighbors[targetLane][2]
 
     isSmooth = isLaneChangeSmooth(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtLdPhySt, ddot_x)
     isSafe = isLaneChangeSafe(carFrame.lateral, carFrame.longitudinal, carPhySt, nxtFlPhySt)
@@ -303,6 +313,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
     end
   end
 
+  targetLane == 0 ? updatedNode = fsm.nodeSet[1] : nothing
   updatedModel = ParamCarModelL0(targetLane, carFrame, updatedNode)  #Reflects targetLane = 0 here.
   return CarLocalIS(updatedCarPhySt, updatedModel)
 end
@@ -393,11 +404,11 @@ function initial_state_distribution(p::SimulationMDP, rng::AbstractRNG)
       push!(probDensity[ln], carDist)
     end
   end
-  return probDensity
+  return CarNormalDist{SimulationMDP}(p, probDensity)
 end
 
 #rand substitute.
-function generate_init_scene(rng::AbstractRNG, d::CarNormalDist)
+function rand(rng::AbstractRNG, d::CarNormalDist{SimulationMDP})
   problem = d.problem
   egoState = problem.egoStartState
   numLanes = n_lanes(problem)
@@ -420,7 +431,167 @@ end
 
 function initial_state(p::SimulationMDP, rng::AbstractRNG)
   isd = initial_state_distribution(p, rng)
-  return generate_init_scene(rng, isd)
+  return rand(rng, isd)
+end
+
+type subintentional_simulation_policy <: Policy
+  egoModel::ParamCarModelL0
+  problem::SimulationMDP
+end
+
+function subintentional_simulation_policy(p::SimulationMDP)
+  fsm = createFSM()
+  idmNormal = createIDM_normal()
+  mobilNormal = createMOBIL_normal()
+  egoFrame = LowLevelCarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
+  targetLane = 0
+  node = fsm.nodeSet[1]
+
+  egoModel = ParamCarModelL0(targetLane, egoFrame, node)
+
+  return subintentional_simulation_policy(egoModel, p)
+end
+
+function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL1)
+  problem = si_policy.problem
+  egoModel = si_policy.egoModel
+  egoFrame = egoModel.frame
+  egoNode = egoModel.currNode
+
+  lon = egoFrame.longitudinal
+  lat = egoFrame.lateral
+  fsm = egoFrame.policy
+
+  egoState = gblSt.ego
+  egoLane = getLaneNo(egoState, problem)
+  x = egoState.state[1]
+  y = egoState.state[2]
+  xdot = egoState.state[3]
+
+  laneCenters = getLaneCenters(problem.roadSegment)
+  goal_y = (problem.egoTargetState[1].state[2] + problem.egoTargetState[2].state[2])/2.0
+  goalLane = getLaneNo(goal_y, problem.roadSegment)
+
+  imm_neighbors = getImmediateNeighbors(gblSt, problem, egoState)
+  targetLane = egoModel.targetLane
+
+  ldrPhySt = imm_neighbors[egoLane][1]
+  dxdot = xdot - ldrPhySt.state[3]
+  g = ldrPhySt.state[1] - x - CAR_LENGTH
+
+  ddot_x = get_idm_accln(lon, xdot, dxdot, g)
+
+  if ddot_x < -4.0
+    ddot_x = -6.0
+  elseif ddot_x < -1.0
+    ddot_x = -2.0
+  elseif ddot_x < 2.0
+    ddot_x = 0.0
+  else
+    ddot_x = 2.0
+  end
+
+  #TODO:Need to pass rng here somehow
+  rng = MersenneTwister(706432)
+  rnd = Base.rand(rng)
+  ydotCumProb = [0.0,0.0,0.0]
+
+  ydotCumProb[1] = get(fsm.actionProb, (egoNode, 2.0), 0.0)
+  ydotCumProb[2] = get(fsm.actionProb, (egoNode, 0.0), 0.0) + ydotCumProb[1]
+  ydotCumProb[3] = get(fsm.actionProb, (egoNode, -2.0), 0.0)+ ydotCumProb[2]
+
+  ydot = 0.0
+  if rnd < ydotCumProb[1]
+    ydot = 2.0  #Move towards desired lane
+  elseif rnd < ydotCumProb[2]
+    ydot = 0.0  #Keep lane
+  else
+    ydot = -2.0 #Abort motion to next lane and move to center of current lane
+  end
+
+  #If targetLane is 0 then check for safety and start moving
+  if targetLane == 0
+    nxtLane = egoLane
+    if goalLane > egoLane
+      nxtLane += 1
+    elseif goalLane < egoLane
+      nxtLane -= 1
+    end
+    if (nxtLane != egoLane)
+      nxtLdPhySt = imm_neighbors[nxtLane][1]
+      nxtFlPhySt = imm_neighbors[nxtLane][2]
+
+      isSmooth = isLaneChangeSmooth(lat, lon, egoState, nxtLdPhySt, ddot_x)
+      isSafe = isLaneChangeSafe(lat, lon, egoState, nxtFlPhySt)
+
+      if isSmooth && isSafe
+        targetLane = nxtLane
+      else
+        targetLane = egoLane
+      end
+    end
+  end
+
+  if ydot < 0.0 #Reverse direction to center of current lane
+    targetLane = carLane
+    ydot = -ydot  #Sign is immaterial, target_y matters
+  end
+  target_y = laneCenters[targetLane]
+
+  if target_y != y
+    ydot = min(ydot, abs(target_y - y)/problem.TIME_STEP)
+    ydot *= (target_y - y)/abs(target_y - y)  #By convention
+  else
+    ydot = 0.0
+  end
+  updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+
+  edgeLabel = "Undetermined"
+  if egoLane == targetLane
+    if (abs(target_y - y) < LANE_WIDTH/16.0)
+      edgeLabel = "Reached"
+      targetLane = 0 #Should reflect in original, ready for next transition, handled later
+    else
+      edgeLabel = "SafeSmooth"
+    end
+  else
+    nxtLdPhySt = imm_neighbors[targetLane][1]
+    nxtFlPhySt = imm_neighbors[targetLane][2]
+
+    isSmooth = isLaneChangeSmooth(lat, lon, egoState, nxtLdPhySt, ddot_x)
+    isSafe = isLaneChangeSafe(lat, lon, egoState, nxtFlPhySt)
+
+    (isSafe && isSmooth) ? edgeLabel = "SafeSmooth" : edgeLabel = "UnsafeOrUnsmooth"
+  end
+  updatedNode = egoNode
+
+  rnd = Base.rand(rng)
+  #println("rnd = ", rnd)
+  cumProb = 0.0
+  for nextNode in fsm.nodeSet
+    #println("NextNode = ", nextNode.nodeLabel)
+    cumProb += get(fsm.transitionProb,(egoLane, FSM_Edge(edgeLabel), nextNode),0.0)
+    #println("CumProb = ", cumProb)
+    if rnd < cumProb
+      updatedNode = nextNode
+      break
+    end
+  end
+  targetLane == 0 ? updatedNode = fsm.nodeSet[1] : nothing
+  updatedModel = ParamCarModelL0(targetLane, egoFrame, updatedNode)  #Reflects targetLane = 0 here.
+  si_policy.egoModel = updatedModel
+
+  egoAct = CarAction(ddot_x, ydot)
+  actIdx = 0
+  egoActions = EgoActionSpace()
+  for act in egoActions.actions
+    actIdx += 1
+    if act == egoAct
+      break
+    end
+  end
+  return actIdx
+
 end
 
 #Code to gridify

@@ -18,7 +18,7 @@ end
     discount::Float64       = 0.99
 end
 
-speed(p::SingleAgentGridMDP) = p.cell_length/p.timestep
+#speed(p::SingleAgentGridMDP) = p.cell_length/p.timestep
 discount(p::SingleAgentGridMDP) = p.discount
 isterminal(p::SingleAgentGridMDP, s::AgentGridLocation) = s.distance > p.goal.distance
 
@@ -93,31 +93,3 @@ end
 initial_state(p::SingleAgentGridMDP, rng::AbstractRNG) = AgentGridLocation(2, 1)
 
 reward(p::SingleAgentGridMDP, s::AgentGridLocation, a::Int, sp::AgentGridLocation) = sp == p.goal ? p.goal_reward : 0.0
-
-# Single Agent
-
-#=
-type UpperLevelState
-  egoLane::UInt64
-  egoCell::UInt64
-  egoVelocity::Float64             #To compute next state, noisy.
-  leadVehicleState::UInt64
-  ltCellState::NTuple(3,UInt64)
-  rtCellState::NTuple(3,UInt64)
-end
-
-type UpperLevelMDP <:POMDPs.MDP{UpperLevelState, Int64}
-  discount_factor::Float64
-  TIME_STEP::Float64
-  length::Float64
-  lanes::UInt64
-  cellSize::Float64
-  goalCell::NTuple{2, UInt64}
-  goalReward::Float64
-  idm_models::Array{IDMParam,1}
-end
-
-UpperLevelMDP() = UpperLevelMDP(0.9, 3.0, 600.0, 4, 75.0, (4,6), 50.0, [IDMParam(a=1.4, b=2.0, T=1.5, xdot0=AVG_HWY_VELOCITY, g0=AVG_GAP, del=4.0)])
-
-discount(p::UpperLevelMDP) = p.discount_factor
-=#

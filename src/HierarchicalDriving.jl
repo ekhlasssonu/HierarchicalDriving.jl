@@ -13,7 +13,7 @@ using Parameters # for @with_kw
 using AutoHashEquals
 
 export LowLevelMDP,
-        subintentional_policy,
+        subintentional_lowlevel_policy,
 
         CarIDOverlay,
         CarVelOverlay,
@@ -25,6 +25,9 @@ export LowLevelMDP,
         rerun,
 
         SingleAgentGridMDP,
+        
+        SimulationMDP,
+        subintentional_simulation_policy,
 
         LANE_WIDTH,
         AVG_HWY_VELOCITY

@@ -8,9 +8,9 @@ using Iterators
 
 import Base.show
 
-show(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1}) = show(io, mime, (t..., [CarVelOverlay(), CarIDOverlay()]))
+show{M <: Union{LowLevelMDP, SimulationMDP}}(io::IO, mime::MIME"image/png", t::Tuple{M, GlobalStateL1}) = show(io, mime, (t..., [CarVelOverlay(), CarIDOverlay()]))
 
-function show{AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{LowLevelMDP, GlobalStateL1, AT})
+function show{M <: Union{LowLevelMDP, SimulationMDP}, AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{M, GlobalStateL1, AT})
     mdp = t[1]
     s = t[2]
     scene = convert(Scene, s)

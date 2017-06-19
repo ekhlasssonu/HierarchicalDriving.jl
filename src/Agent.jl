@@ -62,14 +62,6 @@ end
 Base.hash(m::ParamCarModelL0, h::UInt64=zero(UInt64)) = hash(m.targetLane, hash(m.frame, hash(m.currNode, h)))
 Base.copy(m::ParamCarModelL0) = ParamCarModelL0(m.targetLane, m.frame, m.currNode)
 
-type UpperLevelCarModelL0 <: CarModel
-  frame::LowLevelCarFrameL0
-  currNode::FSM_Node{Int64}
-end
-==(m1::UpperLevelCarModelL0, m2::UpperLevelCarModelL0) = (m1.frame == m2.frame) && (m1.currNode == m2.currNode)
-Base.hash(m::UpperLevelCarModelL0, h::UInt64=zero(UInt64)) = hash(m.frame, hash(m.currNode, h))
-Base.copy(m::UpperLevelCarModelL0) = UpperLevelCarModelL0(m.frame, m.currNode)
-
 type CarLocalIS{M <: CarModel}
   physicalState::CarPhysicalState
   model::M

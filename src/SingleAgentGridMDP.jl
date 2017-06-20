@@ -5,7 +5,7 @@ end
 
 @with_kw immutable SingleAgentGridMDP <: POMDPs.MDP{AgentGridLocation, Int}
     roadSegment::RoadSegment= RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH])
-    n_v_cells::Int64    = 8
+    n_v_cells::Int64        = 8
     timestep::Float64       = 3.0
 
     goal::AgentGridLocation = AgentGridLocation(n_lanes(roadSegment), n_v_cells)      # lane, distance
@@ -53,22 +53,19 @@ function iterator(d::SAGridDist)
 end
 
 function rand(rng::AbstractRNG, d::SAGridDist)
-    lane = d.s.lane
-    rd = rand(rng)
-    if rd < d.p.p_next_cell
-        distance = d.s.distance + 1
-    else
-        distance = d.s.distance
-    end
+  distance = d.s.distance
+  lane = d.s.lane
+  rd = rand(rng)
+  if rd < d.p.p_next_cell
+      distance = d.s.distance + 1
+  end
 
-    rl = rand(rng)
-    if rl < d.p.p_desired_lane
-        lane = clamp(d.s.lane + d.a, 1, n_lanes(d.p))
-    else
-        lane = d.s.lane
-    end
+  rl = rand(rng)
+  if rl < d.p.p_desired_lane
+      lane = clamp(d.s.lane + d.a, 1, n_lanes(d.p))
+  end
 
-    return AgentGridLocation(lane, distance)
+  return AgentGridLocation(lane, distance)
 end
 
 function pdf(d::SAGridDist, s::AgentGridLocation)

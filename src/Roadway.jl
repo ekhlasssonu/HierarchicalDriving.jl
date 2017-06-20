@@ -23,9 +23,9 @@ function getLaneCenter(rs::RoadSegment, ln::Int64)
 end
 
 function getLaneCenters(rs::RoadSegment)
-  laneCenters = Array{Float64,1}()
+  laneCenters = Array{Float64,1}(length(rs.laneMarkings-1))
   for ln in 2:length(rs.laneMarkings)
-    push!(laneCenters, mean(rs.laneMarkings[ln-1:ln]))
+      laneCenters[ln-1] = (rs.laneMarkings[ln-1] + rs.laneMarkings[ln])/2
   end
   return laneCenters
 end

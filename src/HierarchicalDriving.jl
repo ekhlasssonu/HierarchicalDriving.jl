@@ -11,6 +11,7 @@ using ProgressMeter
 using MCTS
 using Parameters # for @with_kw
 using AutoHashEquals
+using StaticArrays
 
 export LowLevelMDP,
         subintentional_lowlevel_policy,

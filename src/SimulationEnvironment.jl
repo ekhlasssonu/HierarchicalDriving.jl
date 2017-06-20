@@ -494,7 +494,7 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   #TODO:Need to pass rng here somehow
   rng = MersenneTwister(706432)
   rnd = Base.rand(rng)
-  ydotCumProb = [0.0,0.0,0.0]
+  ydotCumProb = MVector(0.0,0.0,0.0)
 
   ydotCumProb[1] = get(fsm.actionProb, (egoNode, 2.0), 0.0)
   ydotCumProb[2] = get(fsm.actionProb, (egoNode, 0.0), 0.0) + ydotCumProb[1]

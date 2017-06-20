@@ -217,9 +217,9 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   rnd = Base.rand(rng)
   ydotCumProb = [0.0,0.0,0.0]
 
-  ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
-  ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
-  ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
+  ydotCumProb[1] = get(fsm.actionProb, (currNode,  2.0), 0.0)
+  ydotCumProb[2] = get(fsm.actionProb, (currNode,  0.0), 0.0) + ydotCumProb[1]
+  ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0) + ydotCumProb[2]
 
   ydot = 0.0
   if rnd < ydotCumProb[1]

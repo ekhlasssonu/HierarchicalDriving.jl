@@ -127,7 +127,24 @@ end
 
 #neighborhood is sorted. Binary search to find the current car index or next leading car index. 0 if the car is the first car
 #Return next leading and next following vehicle position for all lanes
-function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::CarPhysicalState)
+function getImmediateNeighbors(i::Int, gblSt::GlobalStateL1, p::SimulationMDP)::Array{SVector{2,CarPhysicalState}}
+  if isnull(glbSt._neighbor_cache)
+    n_cars = length(glbStL1)+1
+    nb_cache = Array(Array{SVector{2,CarPhysicalState}}, n_cars)
+    for i in 0:n_cars
+      nb_cache[i+1] = calcImmediateNeighbors(i, gblSt, p)
+    end
+    gblSt._neighbor_cache = nb_cache
+  end
+  return get(gblSt)[i+1]
+end
+
+function calcImmediateNeighbors(i::Int, gblSt::GlobalStateL1, p::SimulationMDP)::Array{SVector{2,CarPhysicalState}}
+  if i == 0
+    phySt = gblSt.ego
+  else
+    phySt = gblSt.neighborhood[i]
+  end
   carLane = getLaneNo(phySt, p)
   egoState = gblSt.ego
   egoLane = getLaneNo(egoState, p)
@@ -189,11 +206,12 @@ function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::Ca
     end
 
   end
-  return imm_neighbor
+  return SVector{2, CarPhysicalState}[SVector(v) for v in imm_neighbor]
 end
 
 #Code to propagate
-function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
+function updateCarIS(ln::Int, i::Int, gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
+  is = gblSt.neighborhood[ln][i]
   carPhySt = is.physicalState
   carLane = getLaneNo(carPhySt, p)
   laneCenters = getLaneCenters(p.roadSegment)
@@ -203,7 +221,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   currNode = carModel.currNode
   fsm = carFrame.policy
 
-  imm_neighbors = getImmediateNeighbors(gblSt, p, carPhySt)
+  imm_neighbors = getImmediateNeighbors(i, p, carPhySt)
   # Accln:
   ldrPhySt = imm_neighbors[carLane][1]
   x = carPhySt.state[1]
@@ -323,8 +341,8 @@ function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::Abst
   oa_states = Array{Array{CarLocalIS,1},1}(numLanes)
   for ln in 1:numLanes
     oa_states[ln] = Array{CarLocalIS,1}()
-    for carIS in gblSt.neighborhood[ln]
-      push!(oa_states[ln], updateCarIS(carIS, gblSt, p, rng))
+    for i in 1:length(gblSt.neighborhood[ln])
+      push!(oa_states[ln], updateCarIS(i, gblSt, p, rng))
     end
   end
   return oa_states

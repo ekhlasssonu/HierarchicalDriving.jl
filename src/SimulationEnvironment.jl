@@ -437,9 +437,10 @@ end
 type subintentional_simulation_policy <: Policy
   egoModel::ParamCarModelL0
   problem::SimulationMDP
+  rng::MersenneTwister # could be changed to RNG <: AbstractRNG
 end
 
-function subintentional_simulation_policy(p::SimulationMDP)
+function subintentional_simulation_policy(p::SimulationMDP, rng::AbstractRNG=MersenneTwister(706432))
   fsm = createFSM()
   idmNormal = createIDM_normal()
   mobilNormal = createMOBIL_normal()
@@ -449,7 +450,7 @@ function subintentional_simulation_policy(p::SimulationMDP)
 
   egoModel = ParamCarModelL0(targetLane, egoFrame, node)
 
-  return subintentional_simulation_policy(egoModel, p)
+  return subintentional_simulation_policy(egoModel, p, rng)
 end
 
 function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL1)
@@ -491,10 +492,9 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
     ddot_x = 2.0
   end
 
-  #TODO:Need to pass rng here somehow
-  rng = MersenneTwister(706432)
-  rnd = Base.rand(rng)
-  ydotCumProb = MVector(0.0,0.0,0.0)
+  rnd = Base.rand(si_policy.rng)
+  ydotCumProb = [0.0,0.0,0.0]
+
 
   ydotCumProb[1] = get(fsm.actionProb, (egoNode, 2.0), 0.0)
   ydotCumProb[2] = get(fsm.actionProb, (egoNode, 0.0), 0.0) + ydotCumProb[1]
@@ -544,7 +544,7 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   else
     ydot = 0.0
   end
-  updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+  updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, si_policy.rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
   edgeLabel = "Undetermined"
   if egoLane == targetLane
@@ -565,7 +565,7 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   end
   updatedNode = egoNode
 
-  rnd = Base.rand(rng)
+  rnd = Base.rand(si_policy.rng)
   #println("rnd = ", rnd)
   cumProb = 0.0
   for nextNode in fsm.nodeSet

@@ -37,7 +37,7 @@ end
 n_actions(p::LowLevelMDP) = length(actions(p))
 actions(::LowLevelMDP) = EgoActionSpace()
 
-n_lanes(p::LowLevelMDP) = length(p.roadSegment.laneMarkings)-1
+n_lanes(p::LowLevelMDP) = n_lanes(p.roadSegment)
 
 function getLaneNo(y::Float64, p::LowLevelMDP)
   return getLaneNo(y, p.roadSegment)

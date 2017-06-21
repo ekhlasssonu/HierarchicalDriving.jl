@@ -495,6 +495,7 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   rnd = Base.rand(si_policy.rng)
   ydotCumProb = [0.0,0.0,0.0]
 
+
   ydotCumProb[1] = get(fsm.actionProb, (egoNode, 2.0), 0.0)
   ydotCumProb[2] = get(fsm.actionProb, (egoNode, 0.0), 0.0) + ydotCumProb[1]
   ydotCumProb[3] = get(fsm.actionProb, (egoNode, -2.0), 0.0)+ ydotCumProb[2]

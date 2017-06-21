@@ -1,7 +1,7 @@
 module HierarchicalDriving
 
 # package code goes here
-import Base: ==, +, *, -, <, >, copy, Random, hash
+import Base: ==, +, *, -, <, >, copy, Random, hash, length, rand
 importall POMDPs, MCVI
 import ParticleFilters: obs_weight
 using POMDPToolbox
@@ -11,6 +11,7 @@ using ProgressMeter
 using MCTS
 using Parameters # for @with_kw
 using AutoHashEquals
+using StaticArrays
 
 export LowLevelMDP,
         subintentional_lowlevel_policy,
@@ -25,7 +26,7 @@ export LowLevelMDP,
         rerun,
 
         SingleAgentGridMDP,
-        
+
         SimulationMDP,
         subintentional_simulation_policy,
 

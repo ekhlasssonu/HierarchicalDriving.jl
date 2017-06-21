@@ -14,7 +14,7 @@ println()
 
 println("SimulationMDP")
 p7 = SimulationMDP()
-for i in 1:1000
+for i in 1:10
   print("\r$i")
   policy = subintentional_simulation_policy(p7)
   hr = HistoryRecorder(max_steps = 60)

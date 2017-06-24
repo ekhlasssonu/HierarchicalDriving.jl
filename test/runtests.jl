@@ -10,6 +10,8 @@ using MCTS
 
 using POMDPModels # for LightDark1d
 
+include("nb_cache.jl")
+
 # write your own tests here
 #@test 1 == 2
 include("run_random.jl")

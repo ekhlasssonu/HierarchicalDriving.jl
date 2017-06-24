@@ -131,10 +131,66 @@ function getImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::Ca
   if haskey(gblSt._neighbor_cache, phySt)
     return gblSt._neighbor_cache[phySt]
   else
-    nbhd = calcImmediateNeighbors(gblSt, p, phySt)
-    gblSt._neighbor_cache[phySt] = nbhd
-    return nbhd
+    gblSt._neighbor_cache = calcImmediateNeighborCache(gblSt, p)
+    return gblSt._neighbor_cache[phySt]
   end
+end
+
+function calcImmediateNeighborCache(s::GlobalStateL1, p::SimulationMDP)::NbCache
+  nb_cache = NbCache()
+  l = n_lanes(p.roadSegment)
+
+  preceding = [CarPhysicalState((Inf, getLaneCenter(p.roadSegment, i), AVG_HWY_VELOCITY)) for i in 1:l]
+  n_remaining = [length(s.neighborhood[i]) for i in 1:l]
+  front = Array(CarPhysicalState, l)
+  finished = fill(false, l)
+
+  for i in 1:l
+    if n_remaining[i] > 0
+      front[i] = first(s.neighborhood[i]).physicalState
+      n_remaining[i] -= 1
+    else
+      front[i] = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, i), AVG_HWY_VELOCITY))
+      finished[i] = true
+    end
+  end
+  
+  while !all(finished)
+    # this should probably be replaced with a priority queue
+    furthest = CarPhysicalState((-Inf, -1.0, AVG_HWY_VELOCITY))
+    furthest_lane = 0
+    for i in 1:l
+      if !finished[i]
+        if front[i].state[1] > furthest.state[1]
+          furthest = front[i]
+          furthest_lane = i
+        end
+      end
+    end
+
+    @assert furthest.state[2] > 0.0
+
+    if n_remaining[furthest_lane] > 0
+      n_remaining[furthest_lane] -= 1
+      nbhd_lane = s.neighborhood[furthest_lane]
+      front[furthest_lane] = nbhd_lane[length(nbhd_lane) - n_remaining[furthest_lane]].physicalState
+    else
+      front[furthest_lane] = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, furthest_lane), AVG_HWY_VELOCITY))
+      finished[furthest_lane] = true
+    end
+    nbhd = Array(SVector{2,CarPhysicalState}, l)
+    for i in 1:l
+      #XXX handle the case when two cars next to each other have the same x
+      nbhd[i] = SVector(preceding[i], front[i])
+    end
+    preceding[furthest_lane] = furthest
+
+    @assert !haskey(nb_cache, furthest)
+
+    nb_cache[furthest] = nbhd
+  end
+
+  return nb_cache
 end
 
 function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::CarPhysicalState)::Array{SVector{2,CarPhysicalState}}
@@ -149,8 +205,8 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
 
     arr = gblSt.neighborhood[ln]
     if length(arr) == 0  #Empty lane: Add two cars at infinite distance from current car
-      ldr = CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY))
-      trlr = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY))
+      ldr = CarPhysicalState((Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY))
+      trlr = CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY))
       push!(imm_neighbor[ln], ldr)
       push!(imm_neighbor[ln], trlr)
     else
@@ -159,14 +215,14 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
       trail_idx = nbr_indices[2]
       #Add imm. Leading car
       if lead_idx < 1 #Probably never happens
-        push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
+        push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY)))
       #Lead car can be the same as the current car
       else
         if (arr[lead_idx].physicalState == phySt)
           lead_idx -= 1
         end
         if lead_idx < 1
-          push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
+          push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY)))
         else
           push!(imm_neighbor[ln], arr[lead_idx].physicalState)
         end
@@ -174,13 +230,13 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
 
       #Add imm. trailing car
       if length(arr) < trail_idx #Happens when all vehicles are leading (or the same)
-        push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
+        push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY)))
       else
         if (arr[trail_idx].physicalState == phySt)
           trail_idx += 1
         end
         if length(arr) < trail_idx
-          push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, carLane), AVG_HWY_VELOCITY)))
+          push!(imm_neighbor[ln], CarPhysicalState((-Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY)))
         else
           push!(imm_neighbor[ln], arr[trail_idx].physicalState)
         end

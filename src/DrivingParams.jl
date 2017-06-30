@@ -1,15 +1,3 @@
-LANE_WIDTH = 4.0
-AVG_GAP = 75.0 #53.5 #From steady state #40.24 #Derived from 1.5 second time gap at 60mph
-AVG_HWY_VELOCITY = 25.0
-VEL_STD_DEV = 2.5
-
-#Car dimensions
-CAR_LENGTH = 6.0
-CAR_WIDTH = 2.5
-
-LONG_ACCLN = 2.0
-LAT_VEL = 2.0
-
 import Base: ==, hash, copy
 
 #=
@@ -83,7 +71,7 @@ function createIDM_normal()
 end
 
 function createIDM_aggressive()
-  return IDMParam(1.4, 2.0, 1.5, AVG_HWY_VELOCITY+2.2352, 0.0, 4.0)
+  return IDMParam(1.4, 2.0, 1.5, AVG_HWY_VELOCITY+2.2352, 0.5, 4.0)
 
 end
 

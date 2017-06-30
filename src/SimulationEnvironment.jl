@@ -194,6 +194,8 @@ end
 
 #Code to propagate
 function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
+  numLanes = n_lanes(p)
+
   carPhySt = is.physicalState
   carLane = getLaneNo(carPhySt, p)
   laneCenters = getLaneCenters(p.roadSegment)
@@ -214,24 +216,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
   ddot_x = get_idm_accln(is.model.frame.longitudinal, xdot, dxdot, g)
 
-  rnd = Base.rand(rng)
-  ydotCumProb = [0.0,0.0,0.0]
-
-  ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
-  ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
-  ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
-
-  ydot = 0.0
-  if rnd < ydotCumProb[1]
-    ydot = 2.0  #Move towards desired lane
-  elseif rnd < ydotCumProb[2]
-    ydot = 0.0  #Keep lane
-  else
-    ydot = -2.0 #Abort motion to next lane and move to center of current lane
-  end
-  #print("CurrNode: ",currNode.nodeLabel," cLane = $ln tLane = $targetLane ")
   y = carPhySt.state[2]
-
 
   #Figure out edge labels
   if targetLane == 0  #TargetLane not fixed yet
@@ -251,7 +236,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
     cgLtPossible = false
     ltLane = carLane + 1
-    if ltLane <= n_lanes(p) #Lane exists now see if lane change is possible
+    if ltLane <= numLanes #Lane exists now see if lane change is possible
       nxtLdPhySt = imm_neighbors[ltLane][1]
       nxtFlPhySt = imm_neighbors[ltLane][2]
 
@@ -265,21 +250,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
     cgRtPossible ? (cgLtPossible ? ((rand(rng) < 0.5) ? targetLane = rtLane : targetLane = ltLane) : targetLane = rtLane) : (cgRtPossible ? targetLane = ltLane : targetLane = carLane)
     #carModel.targetLane = targetLane #Not needed here
   end
-
-  #target Lane has been initialized
-  if ydot < 0.0 #Reverse direction to center of current lane
-    targetLane = carLane
-    ydot = -ydot  #Sign is immaterial, target_y matters
-  end
   target_y = laneCenters[targetLane]
-
-  if target_y != y
-    ydot = min(ydot, abs(target_y - y)/p.TIME_STEP)
-    ydot *= (target_y - y)/abs(target_y - y)  #By convention
-  else
-    ydot = 0.0
-  end
-  updatedCarPhySt = propagateCar(carPhySt, CarAction(ddot_x, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
   edgeLabel = "Undetermined"
   if carLane == targetLane
@@ -313,10 +284,45 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
     end
   end
 
+  currNode = updatedNode
+
+  rnd = Base.rand(rng)
+  ydotCumProb = [0.0,0.0,0.0]
+
+  ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
+  ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
+  ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
+
+  ydot = 0.0
+  if rnd < ydotCumProb[1]
+    ydot = 2.0  #Move towards desired lane
+  elseif rnd < ydotCumProb[2]
+    ydot = 0.0  #Keep lane
+  else
+    ydot = -2.0 #Abort motion to next lane and move to center of current lane
+  end
+  #print("CurrNode: ",currNode.nodeLabel," cLane = $ln tLane = $targetLane ")
+
+  #target Lane has been initialized
+  if ydot < 0.0 #Reverse direction to center of current lane
+    targetLane = carLane
+    ydot = -ydot  #Sign is immaterial, target_y matters
+  end
+
+  if target_y != y
+    ydot = min(ydot, abs(target_y - y)/p.TIME_STEP)
+    ydot *= (target_y - y)/abs(target_y - y)  #By convention
+  else
+    ydot = 0.0
+  end
+  updatedCarPhySt = propagateCar(carPhySt, CarAction(ddot_x, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+
+
   targetLane == 0 ? updatedNode = fsm.nodeSet[1] : nothing
   updatedModel = ParamCarModelL0(targetLane, carFrame, updatedNode)  #Reflects targetLane = 0 here.
   return CarLocalIS(updatedCarPhySt, updatedModel)
 end
+
 
 function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
   numLanes = n_lanes(p)
@@ -327,7 +333,7 @@ function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::Abst
       push!(oa_states[ln], updateCarIS(carIS, gblSt, p, rng))
     end
   end
-  return oa_states
+  return sortNeighborhood(oa_states,p)
 end
 
 function generate_s(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
@@ -494,7 +500,7 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   #TODO:Need to pass rng here somehow
   rng = MersenneTwister(706432)
   rnd = Base.rand(rng)
-  ydotCumProb = [0.0,0.0,0.0]
+  ydotCumProb = MVector(0.0,0.0,0.0)
 
   ydotCumProb[1] = get(fsm.actionProb, (egoNode, 2.0), 0.0)
   ydotCumProb[2] = get(fsm.actionProb, (egoNode, 0.0), 0.0) + ydotCumProb[1]

@@ -75,8 +75,8 @@ collision(is1::CarLocalIS, is2::CarLocalIS) = (abs(is1.physicalState.state[1] - 
 
 #ddot_x is determined by IDM, Only for dot_y
 function createFSM()
-  nodeSet = Array{FSM_Node{Int64},1}(5)
-  for i in 1:5
+  nodeSet = Array{FSM_Node{Int64},1}(4)
+  for i in 1:4
     nodeSet[i] = FSM_Node{Int64}(i)
   end
   edgeLabels = [FSM_Edge{String}("Reached"),
@@ -85,8 +85,8 @@ function createFSM()
                 FSM_Edge{String}("Undetermined")]
   actionProb = Dict{Tuple{FSM_Node{Int64}, Float64}, Float64}()
 
-  actionProb[(nodeSet[1], 0.0)] = 0.5  #1: Keep straight with prob 0.5
-  actionProb[(nodeSet[1], 2.0)] = 0.5  #1: Move toward target with prob 0.5
+  actionProb[(nodeSet[1], 0.0)] = 0.5  #1: Keep straight with prob 0.5; Dummy node anyway
+  actionProb[(nodeSet[1], 2.0)] = 0.5  #1: Move toward target with prob 0.5; Dummy node anyway
   actionProb[(nodeSet[2], 0.0)] = 1.0  #2: Reached target keep straight for ever
   actionProb[(nodeSet[3],-2.0)] = 1.0  #3: Unsafe to move towards target, move to the center of the current lane
   actionProb[(nodeSet[4], 2.0)] = 1.0  #4: Move towards the target
@@ -100,15 +100,14 @@ function createFSM()
   transitionProb[(nodeSet[1], edgeLabels[4], nodeSet[4])] = 0.5 #Undeterminable move to 4 with prob 0.5
 
   transitionProb[(nodeSet[2], edgeLabels[1], nodeSet[2])] = 1.0 #Reached, ∀ observation keep straight
-  transitionProb[(nodeSet[2], edgeLabels[2], nodeSet[2])] = 1.0
+  transitionProb[(nodeSet[2], edgeLabels[2], nodeSet[4])] = 1.0
   transitionProb[(nodeSet[2], edgeLabels[3], nodeSet[2])] = 1.0
   transitionProb[(nodeSet[2], edgeLabels[4], nodeSet[2])] = 1.0
 
-  transitionProb[(nodeSet[3], edgeLabels[1], nodeSet[3])] = 1.0 #Shouldn't recieve this observation. Just stay here.
+  transitionProb[(nodeSet[3], edgeLabels[1], nodeSet[2])] = 1.0 #Should receive this on reaching the center of the current lane
   transitionProb[(nodeSet[3], edgeLabels[2], nodeSet[4])] = 1.0 #Safe to move, transition to 4
   transitionProb[(nodeSet[3], edgeLabels[3], nodeSet[3])] = 1.0 #Unsafe, Keep in 3
-  transitionProb[(nodeSet[3], edgeLabels[4], nodeSet[3])] = 0.5 #Undeterminable, stay here with prob. 0.5
-  transitionProb[(nodeSet[3], edgeLabels[4], nodeSet[4])] = 0.5 #Undeterminable, transition to 4 with prob 0.5
+  transitionProb[(nodeSet[3], edgeLabels[4], nodeSet[3])] = 1.0 #Undeterminable, stay here with prob. 1.0
 
   transitionProb[(nodeSet[4], edgeLabels[1], nodeSet[2])] = 1.0 #Reached, transition to 2
   transitionProb[(nodeSet[4], edgeLabels[2], nodeSet[4])] = 1.0 #safe, keep moving towards target.

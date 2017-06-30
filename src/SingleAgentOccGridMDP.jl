@@ -35,8 +35,7 @@ immutable SingleAgentOccGridMDP <: POMDPs.MDP{ImmGridOccSt, Int}
   discount::Float64
 end
 
-function SingleAgentOccGridMDP(n_agents::Int64, n_v_cells::Int64, goal_reward::Float64, p_next_lane::Array{Float64,4}, p_next_dist::Array{Float64,5})
-  roadSegment = RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH])
+function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goal_reward::Float64, p_next_lane::Array{Float64,4}, p_next_dist::Array{Float64,5})
   goalCell = AgentGridLocation(n_lanes(roadSegment), n_v_cells)
   return SingleAgentOccGridMDP(n_agents, roadSegment, n_v_cells,
                                 [AgentGridLocation(n_lanes(roadSegment), n_v_cells),
@@ -95,9 +94,9 @@ function iterator(d::SAOccGridDist)
   next_states = Vector{ImmGridOccSt}()
   next_ego_locations = Vector{AgentGridLocation}()
   if d.s.egoGrid.lane + d.a > n_lanes(d.p) || d.s.lane + d.a < 1
-    next_ego_locations = [(AgentGridLocation(d.s.lane, d.s.distance + dd) for dd in (0,1))...]
+    next_ego_locations = [(AgentGridLocation(d.s.lane, d.s.distance + dd) for dd in 0:3)...]
   else
-    next_ego_locations = [(AgentGridLocation(d.s.lane + l, d.s.distance + dd) for l in (0, d.a), dd in (0,1))...]
+    next_ego_locations = [(AgentGridLocation(d.s.lane + l, d.s.distance + dd) for l in (0, d.a), dd in 0:3)...]
   end
 
   for next_ego in next_ego_locations
@@ -113,7 +112,7 @@ function iterator(d::SAOccGridDist)
   return next_states
 end
 
-function rand(rng::AbstractRNG, d::SAGridDist)
+function rand(rng::AbstractRNG, d::SAOccGridDist)
   p = d.p
   a = d.a
   s = d.s
@@ -138,7 +137,7 @@ function rand(rng::AbstractRNG, d::SAGridDist)
   rl = rand(rng)
   next_ego_lane = egoLane
   if rl < p_desired_lane
-    next_ego_lane = = clamp(egoLane + a, 1, n_lanes(p))
+    next_ego_lane = clamp(egoLane + a, 1, n_lanes(p))
   end
   #next distance
   rd = rand(rng)
@@ -206,4 +205,14 @@ end
 function pdf(d::SAOccGridDist, s::ImmGridOccSt)
 
 
+end
+
+function getCarGridLocation(p::SingleAgentOccGridMDP, phySt::CarPhysicalState)
+  x = phySt.state[1]
+  y = phySt.state[2]
+  lane = getLaneNo(y, p.roadSegment)
+  cellLength = length(p.roadSegment)/p.n_v_cells
+  x_offset = x - p.roadSegment.x_boundary[1]
+  distance = round(Int64, ceil(x_offset/cellLength))
+  return AgentGridLocation(lane, distance)
 end

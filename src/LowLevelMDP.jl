@@ -21,12 +21,12 @@ LowLevelMDP() = LowLevelMDP(0.9, 0.2, 20,
                             (CarPhysicalState((0.0, 5.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)), CarPhysicalState((500.0, 5.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
                             5.0, -50.0, -1.0, -3.0, -2.0, -0.5, getFrameList())
 =#
-LowLevelMDP() = LowLevelMDP(0.99, 0.2, 20,
+LowLevelMDP() = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON,
                             RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH]),
                             CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
                             (CarPhysicalState((10.0, 3.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 0.5)),
                              CarPhysicalState((100.0, 3.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 0.5))),
-                            50.0, -500.0, -1.0, -3.0, -2.0, -1.0, getFrameList())
+                            ll_goalReward, ll_collisionCost, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
 
 discount(p::LowLevelMDP) = p.discount_factor
 
@@ -555,9 +555,7 @@ function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRN
 end
 
 function initial_state(p::LowLevelMDP, rng::AbstractRNG)
-  #println("Begin initial_state")
   isd = initial_state_distribution(p)
-  #println("End initial_state")
   return rand(rng, isd)
 end
 
@@ -569,8 +567,8 @@ end
 
 function subintentional_lowlevel_policy(p::LowLevelMDP)
   fsm = createFSM()
-  idmNormal = createIDM_normal()
-  mobilNormal = createMOBIL_normal()
+  idmNormal = createIDM_aggressive()
+  mobilNormal = createMOBIL_aggressive()
   egoFrame = LowLevelCarFrameL0(idmNormal, mobilNormal, fsm, CAR_LENGTH, CAR_WIDTH)
 
   return subintentional_lowlevel_policy(egoFrame, p)
@@ -636,7 +634,10 @@ function action(si_policy::subintentional_lowlevel_policy, gblSt::GlobalStateL1)
     nextLane -= 1
   end
 
-  ydot = (target_y - y)/abs(target_y - y) * 2.0
+  ydot = 0.0
+  if (target_y - y) != 0
+    ydot = (target_y - y)/abs(target_y - y) * 2.0
+  end
   if nextLane == egoLane  #Move to desired y
     if abs(target_y - y) < LANE_WIDTH/16
       ydot = 0.0

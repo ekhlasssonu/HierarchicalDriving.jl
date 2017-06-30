@@ -23,7 +23,7 @@ end
 
 show{M <: Union{LowLevelMDP, SimulationMDP}}(io::IO, mime::MIME"image/png", t::Tuple{M, GlobalStateL1}) = show(io, mime, HDVis(t..., overlays=[CarVelOverlay(), CarIDOverlay()]))
 
-show{M <: Union{LowLevelMDP, SimulationMDP}, AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{M, GlobalStateL1, AT}) = show(io, mime, Hvis(t[1], t[2], overlays=t[3]))
+show{M <: Union{LowLevelMDP, SimulationMDP}, AT<:AbstractArray}(io::IO, mime::MIME"image/png", t::Tuple{M, GlobalStateL1, AT}) = show(io, mime, HDVis(t[1], t[2], overlays=t[3]))
 
 function show(io::IO, mime::MIME"image/png", v::HDVis)
     mdp = v.problem

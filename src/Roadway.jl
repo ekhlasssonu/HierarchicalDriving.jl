@@ -4,7 +4,7 @@ type RoadSegment
 end
 
 n_lanes(rs::RoadSegment) = length(rs.laneMarkings)-1
-length(rs::RoadSegment) = rs.x_boundary[2] = rs.x_boundary[1]
+length(rs::RoadSegment) = rs.x_boundary[2] - rs.x_boundary[1]
 
 function getLaneNo(y::Float64, rs::RoadSegment)
   for j = 2:length(rs.laneMarkings)

@@ -10,13 +10,14 @@ using MCTS
 
 using POMDPModels # for LightDark1d
 
+
 include("nb_cache.jl")
+
+#include("run_gen_ul_tran.jl")
 
 # write your own tests here
 #@test 1 == 2
 include("run_random.jl")
-
-#include("runMCVI.jl")
 
 #include("run_single_agent_grid.jl")
 

@@ -34,13 +34,17 @@ function sample(rng::AbstractRNG, ud::UniformDist)
   return lb + Base.rand(rng) * fact
 end
 
+typealias NbCache Dict{CarPhysicalState, Array{SVector{2,CarPhysicalState},1}}
+
 #State of world. Should work for upper level as well.
 type GlobalStateL1{C <: CarLocalIS}
   terminal::Int64 #0 for not terminal, 1 for collision, 2 for success
   ego::CarPhysicalState
-  neighborhood::Array{Array{C,1},1}  #In order  of lane no. and x position
+  neighborhood::Array{Array{C,1},1}  # In order  of lane no. and x position
+  _neighbor_cache::NbCache
 end
-GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego, neighborhood)
+GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego, neighborhood, NbCache())
+GlobalStateL1(term, ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(term, ego, neighborhood, NbCache())
 ==(s1::GlobalStateL1,s2::GlobalStateL1) = (s1.terminal == s2.terminal) && (s1.ego == s2.ego) && (s1.neighborhood == s2.neighborhood)
 Base.hash(s1::GlobalStateL1, h::UInt64 = zero(UInt64)) = hash(s1.terminal, hash(s1.ego, hash(s1.neighborhood, h)))
 Base.copy(s1::GlobalStateL1) = GlobalStateL1(s1.terminal, s1.ego, s1.neighborhood)

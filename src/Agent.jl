@@ -26,7 +26,7 @@ Base.hash(a1::CarAction, h::UInt64=zero(UInt64)) = hash(a1.ddot_x, hash(a1.dot_y
 Base.copy(a1::CarAction) = CarAction(a1.ddot_x, a1.dot_y)
 
 
-type CarPhysicalState <: CarState
+immutable CarPhysicalState <: CarState
   #absent::Bool
   state::NTuple{3,Float64} #<x, y, \dot{x} >.
 end

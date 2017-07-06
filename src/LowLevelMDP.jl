@@ -30,7 +30,10 @@ LowLevelMDP() = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON,
 
 discount(p::LowLevelMDP) = p.discount_factor
 
-function isterminal(p::LowLevelMDP, st::GlobalStateL1{CarLocalIS{ParamCarModelL0}})
+#function isterminal(p::LowLevelMDP, st::GlobalStateL1{CarLocalIS{ParamCarModelL0}})
+#  st.terminal > 0 ? true : false
+#end
+function isterminal(p::LowLevelMDP, st::GlobalStateL1)
   st.terminal > 0 ? true : false
 end
 #From actions
@@ -270,39 +273,9 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
       ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
 
-      #Sample action from current node
-      rnd = Base.rand(rng)
-      ydotCumProb = [0.0,0.0,0.0]
-
-      ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
-      ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
-      ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
-
-      ydot = 0.0
-      if rnd < ydotCumProb[1]
-        ydot = 2.0  #Move towards desired lane
-      elseif rnd < ydotCumProb[2]
-        ydot = 0.0  #Keep lane
-      else
-        ydot = -2.0 #Abort motion to next lane and move to center of current lane
-      end
-      #print("CurrNode: ",currNode.nodeLabel," cLane = $ln tLane = $targetLane ")
+      #Compute ydot
       y = carPhySt.state[2]
-
       target_y = laneCenters[targetLane]
-      if ydot < 0.0 #Reverse direction to center of current lane
-        target_y = laneCenters[ln]
-        ydot = -ydot  #Sign is immaterial, target_y matters
-      end
-
-      if target_y != y
-        ydot = min(ydot, abs(target_y - y)/p.TIME_STEP)
-        ydot *= (target_y - y)/abs(target_y - y)  #By convention
-      else
-        ydot = 0.0
-      end
-      #println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
-      updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
       nextLane = ln
       if targetLane > ln
@@ -381,6 +354,39 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
           break
         end
       end
+
+      currNode = updatedNode
+      rnd = Base.rand(rng)
+      ydotCumProb = [0.0,0.0,0.0]
+
+      ydotCumProb[1] = get(fsm.actionProb, (currNode, 2.0), 0.0)
+      ydotCumProb[2] = get(fsm.actionProb, (currNode, 0.0), 0.0) + ydotCumProb[1]
+      ydotCumProb[3] = get(fsm.actionProb, (currNode, -2.0), 0.0)+ ydotCumProb[2]
+
+      ydot = 0.0
+      if rnd < ydotCumProb[1]
+        ydot = 2.0  #Move towards desired lane
+      elseif rnd < ydotCumProb[2]
+        ydot = 0.0  #Keep lane
+      else
+        ydot = -2.0 #Abort motion to next lane and move to center of current lane
+      end
+      #print("CurrNode: ",currNode.nodeLabel," cLane = $ln tLane = $targetLane ")
+
+      if ydot < 0.0 #Reverse direction to center of current lane
+        target_y = laneCenters[ln]
+        ydot = -ydot  #Sign is immaterial, target_y matters
+      end
+
+      if target_y != y
+        ydot = min(ydot, abs(target_y - y)/p.TIME_STEP)
+        ydot *= (target_y - y)/abs(target_y - y)  #By convention
+      else
+        ydot = 0.0
+      end
+      #println("x = $x, y = $y, target_y = $target_y, ydot = $ydot")
+      updatedCarPhySt = propagateCar(carPhySt, CarAction(ddotx, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+
       #println("cNode = ",currNode.nodeLabel," edgeLabel = ",edgeLabel, " nNode = ",updatedNode.nodeLabel)
       updatedModel = ParamCarModelL0(targetLane, updatedFrame, updatedNode)
       updatedIS = CarLocalIS(updatedCarPhySt, updatedModel)
@@ -537,7 +543,7 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   currLaneCenter = getLaneCenter(egoSt, p)
 
 
-  reward += p.steeringCost * (abs(currLaneCenter - egoSt.state[2]))
+  reward += p.steeringCost * (abs(currLaneCenter - egoSt.state[2])) * p.TIME_STEP
 
   #println("End reward")
   #println("Reward = ", reward)

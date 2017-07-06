@@ -12,7 +12,7 @@ for i in 1:10
 end
 println()
 
-println("SimulationMDP")
+#=println("SimulationMDP")
 p7 = SimulationMDP()
 for i in 1:10
   print("\r$i")
@@ -20,4 +20,4 @@ for i in 1:10
   hr = HistoryRecorder(max_steps = 60)
   simulate(hr, p7, policy)
 end
-println()
+println()=#

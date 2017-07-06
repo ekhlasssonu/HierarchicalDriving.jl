@@ -154,7 +154,7 @@ function calcImmediateNeighborCache(s::GlobalStateL1, p::SimulationMDP)::NbCache
       finished[i] = true
     end
   end
-  
+
   while !all(finished)
     # this should probably be replaced with a priority queue
     furthest = CarPhysicalState((-Inf, -1.0, AVG_HWY_VELOCITY))

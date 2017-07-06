@@ -29,19 +29,19 @@ immutable SingleAgentOccGridMDP <: POMDPs.MDP{ImmGridOccSt, Int}
   n_v_cells::Int64
   goal::Vector{AgentGridLocation}
   goal_reward::Float64
-  p_next_lane::Array{Float64,4}          #Pr of reaching next lane given action, ld_dist, lt_occ_int, rt_occ_int
-  p_next_dist::Array{Float64,5} #Pr of reaching next cell (vertically) where next cell = current cell + idx
+  egoTranProb::Array{Float64, 6}
 
   discount::Float64
 end
 
-function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goal_reward::Float64, p_next_lane::Array{Float64,4}, p_next_dist::Array{Float64,5})
+function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goal_reward::Float64, tranFileName::String)
   goalCell = AgentGridLocation(n_lanes(roadSegment), n_v_cells)
+  tranProb = load(tranFileName, "tranProb")
   return SingleAgentOccGridMDP(n_agents, roadSegment, n_v_cells,
                                 [AgentGridLocation(n_lanes(roadSegment), n_v_cells),
                                   AgentGridLocation(n_lanes(roadSegment), n_v_cells-1),
                                   AgentGridLocation(n_lanes(roadSegment), n_v_cells-2)],
-                                  goal_reward, p_next_lane, p_next_dist, 0.9)
+                                  goal_reward, tranProb, 0.9)
 end
 
 discount(p::SingleAgentOccGridMDP) = p.discount

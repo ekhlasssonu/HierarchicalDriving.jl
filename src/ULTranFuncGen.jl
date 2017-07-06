@@ -12,19 +12,20 @@ function getCarGridLocation(gen::SingleAgentOccGridMDP_TGenerator, phySt::CarPhy
   y = phySt.state[2]
   lane = getLaneNo(y, gen.road_segment)
   x_offset = x - gen.road_segment.x_boundary[1]
-  distance = round(Int64, ceil(x_offset/gen.cell_length))
+  distance = Int64(ceil(x_offset/gen.cell_length))
   return AgentGridLocation(lane, distance)
 end
 
 function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulInitState::ImmGridOccSt, a::Int64, rng::AbstractRNG)
   rs = gen.road_segment
+  lb_x = rs.x_boundary[1]
   cell_length = gen.cell_length
   numLanes = n_lanes(rs)
   egoGrid = ulInitState.egoGrid
   egoLane = egoGrid.lane
   egoDist = egoGrid.distance
   init_y = getLaneCenter(rs, egoLane) + randn(rng) * LANE_WIDTH/12.0
-  init_x = ((egoDist - 1) + rand(rng)) * cell_length
+  init_x = lb_x + ((egoDist - 1) + rand(rng)) * cell_length
   init_xdot = randn(rng) * VEL_STD_DEV + AVG_HWY_VELOCITY
   initSt = CarPhysicalState((init_x, init_y, init_xdot))
 
@@ -35,11 +36,11 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
   fin_y_lb = fin_y - 0.5
   fin_y_ub = fin_y + 0.5
 
-  fin_x_lb = egoDist * cell_length
-  fin_x_ub = (egoDist + 3) * cell_length
+  fin_x_lb = lb_x + egoDist * cell_length
+  fin_x_ub = lb_x + (egoDist + 4) * cell_length
 
-  finSt_lb = CarPhysicalState((fin_x_lb, fin_y_lb, AVG_HWY_VELOCITY - 0.5))
-  finSt_ub = CarPhysicalState((fin_x_ub, fin_y_ub, AVG_HWY_VELOCITY + 0.5))
+  finSt_lb = CarPhysicalState((fin_x_lb, fin_y_lb, AVG_HWY_VELOCITY - VEL_STD_DEV))
+  finSt_ub = CarPhysicalState((fin_x_ub, fin_y_ub, AVG_HWY_VELOCITY + VEL_STD_DEV))
 
   llMDP = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON, rs, initSt, (finSt_lb, finSt_ub),
                           ll_goalReward, ll_collisionCost, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
@@ -108,41 +109,4 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
   end
   initGblSt = GlobalStateL1(0, initSt, neighborhood)
   return (llMDP, initGblSt)
-end
-
-type DummyGBLStLLMDP <: POMDPs.MDP{GlobalStateL1, Int64}
-  llMDP::LowLevelMDP
-  gblSt::GlobalStateL1
-end
-
-function DummyGBLStLLMDP(gen::SingleAgentOccGridMDP_TGenerator, ulInitState::ImmGridOccSt, a::Int64, rng::AbstractRNG)
-  llMDP, gblSt = initialize_LowLevelMDP_gblSt(gen, ulInitState, a, rng)
-  return DummyGBLStLLMDP(llMDP, gblSt)
-end
-
-function initial_state(p::DummyGBLStLLMDP, rng::AbstractRNG)
-  return p.gblSt
-end
-
-function reward(p::DummyGBLStLLMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
-  return reward(p.llMDP, s, a, rng)
-end
-
-function generate_s(p::DummyGBLStLLMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  return generate_s(p.llMDP, s, a, rng)
-end
-
-function generate_sr(p::DummyGBLStLLMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  return generate_sr(p.llMDP, s, a, rng)
-end
-
-function generate_sprime_ego(gen::SingleAgentOccGridMDP_TGenerator, ulInitState::ImmGridOccSt, a::Int64, solver::DPWSolver, rng::AbstractRNG)
-  mdp_st = initialize_LowLevelMDP_gblSt(gen, ulInitState)
-  p = mdp_st[1]
-
-  policy1 = solve(solver, p)
-  hr1 = HistoryRecorder(max_steps = p.llMDP.HORIZON, rng = rng)
-  hist1 = simulate(hr1, p, policy1);
-  finEgoState = hist1[end].ego
-  return getCarGridLocation(p.ulMDP, finEgoState)
 end

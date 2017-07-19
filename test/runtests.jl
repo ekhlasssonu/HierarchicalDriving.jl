@@ -13,7 +13,9 @@ using POMDPModels # for LightDark1d
 
 #include("nb_cache.jl")
 
-@time include("run_gen_ul_tran.jl")
+#@time include("run_gen_ul_tran.jl")
+
+include("run_single_agent_occgrid.jl")
 
 # write your own tests here
 #@test 1 == 2

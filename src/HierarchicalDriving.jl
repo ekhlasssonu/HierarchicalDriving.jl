@@ -42,7 +42,12 @@ export LowLevelMDP,
         int2BoolArray,
         initialize_LowLevelMDP_gblSt,
         getCarGridLocation,
-        n_lanes
+        n_lanes,
+        road_segment,
+        SAOccGridDist,
+        iterator,
+        checkProb,
+        normalize_egoTranProb
 
 include("FSM.jl")
 include("Roadway.jl")

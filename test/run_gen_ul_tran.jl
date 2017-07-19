@@ -25,6 +25,7 @@ numLanes = n_lanes(road_segment)
 gen = SingleAgentOccGridMDP_TGenerator(road_segment, 25.0)
 
 tranProb = zeros(Float64, (3, 4, 8, 8, 3, 5))  #Pr(Δln, Δdist|a, ldDist, occLt, occRt)
+actionRwd = zeros(Float64, (3,4,8,8))
 fill!(tranProb, 0.2)
 #Experiments will be carried out for varying number of agents
 
@@ -48,12 +49,12 @@ for a in -1:1
           #println("initEgoState = ", gblSt.ego)
           solver = DPWSolver(depth=llMDP.HORIZON,
                          exploration_constant=10.0,
-                         n_iterations=2_000,
+                         n_iterations=1_000,
                          k_action=10.0,
                          alpha_action=1/10,
                          k_state=5.0,
                          alpha_state=1/10,
-                         #estimate_value=RolloutEstimator(subintentional_lowlevel_policy(llMDP))
+                         estimate_value=RolloutEstimator(subintentional_lowlevel_policy(llMDP))
                         )
 
           policy = solve(solver, llMDP)
@@ -64,18 +65,21 @@ for a in -1:1
           #println("finEgoState = ",finEgoState, " finEgoPos = ", finEgoPos)
           laneOffset = finEgoPos.lane - initEgoPos.lane
           distOffset = finEgoPos.distance - initEgoPos.distance
+          rwd = discounted_reward(hist)
           #println("distOffset = ", distOffset)
           if distOffset >= 5 || clamp(initEgoPos.lane + a, 0, numLanes) != finEgoPos.lane
-            println("\n\t\tStartLane = ", initEgoPos.lane, " TargetLane = ", clamp(initEgoPos.lane + a, 0, numLanes), " FinalLane = ", finEgoPos.lane, " distOffset = ", distOffset)
+            println("\n\t\tStartLane = ", initEgoPos.lane, " TargetLane = ", clamp(initEgoPos.lane + a, 0, numLanes), " FinalLane = ", finEgoPos.lane, " distOffset = ", distOffset, " Reward = ", rwd)
           end
           distOffset = clamp(distOffset, 0, 4)
 
           #print("\t\tStartLane = ", initEgoPos.lane, " TargetLane = ", clamp(initEgoPos.lane + a, 0, numLanes), " FinalLane = ", finEgoPos.lane, " distOffset = ", distOffset)
           tranProb[a+2,ldCell+1,occLt,occRt,laneOffset+2,distOffset+1] += 1
+          actionRwd[a+2,ldCell+1,occLt,occRt] += rwd
         end
         for laneOffset in -1:1
           for distOffset in 0:4
             tranProb[a+2,ldCell+1,occLt,occRt,laneOffset+2,distOffset+1] /= n_iter
+            actionRwd[a+2,ldCell+1,occLt,occRt] /= n_iter
           end
         end
       end
@@ -86,6 +90,7 @@ end
 println("tranProb = ", tranProb)
 
 save("../scratch/TranProb.jld", "tranProb", tranProb)
+save("../scratch/ActionRwd.jld", "r_s_a", actionRwd)
 #t2 = load("../scratch/TranProb.jld", "tranProb")
 
 #println("t2 = ", t2)

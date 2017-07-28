@@ -76,7 +76,7 @@ end
 
 function pdf(d::SAGridDist, s::AgentGridLocation)
   p_lane = 0.0
-  if s.lane == clamp(d.s.lane + d.a, 1, n_lanes(p))
+  if s.lane == clamp(d.s.lane + d.a, 1, n_lanes(d.p))
     p_lane += d.p.p_desired_lane
   end
   if s.lane == d.s.lane

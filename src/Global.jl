@@ -37,10 +37,10 @@ end
 typealias NbCache Dict{CarPhysicalState, Array{SVector{2,CarPhysicalState},1}}
 
 #State of world. Should work for upper level as well.
-type GlobalStateL1{C <: CarLocalIS}
+type GlobalStateL1
   terminal::Int64 #0 for not terminal, 1 for collision, 2 for success
   ego::CarPhysicalState
-  neighborhood::Array{Array{C,1},1}  # In order  of lane no. and x position
+  neighborhood::Array{Array{CarLocalIS,1},1}  # In order  of lane no. and x position
   _neighbor_cache::NbCache
 end
 GlobalStateL1(ego::CarPhysicalState, neighborhood::Array{Array{CarLocalIS,1},1}) = GlobalStateL1(0, ego, neighborhood, NbCache())

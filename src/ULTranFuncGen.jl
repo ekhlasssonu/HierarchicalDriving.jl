@@ -67,11 +67,9 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
             intentionArray[ln] = 0.7
             intentionArray[ln-1] = 0.3
             carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
-            if !collision(initSt, carState)
-              push!(neighborhood[ln], carState)
-              break
-            end
+            collision(initSt, carSta)
           end
+          push!(neighborhood[ln], carState)
         end
       end
 
@@ -97,20 +95,15 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
       for idx in length(occ_rt):-1:1
         present = occ_rt[idx]
         if present
-          while true
-            init_x = lb_x + (egoDist - 1 + idx-2) * cell_length + rand(rng) * cell_length  #mean of initial x
-            init_y = getLaneCenter(rs, ln) #(ln - 1) * LANE_WIDTH + LANE_WIDTH/2.0   #mean of initial y
-            init_xdot = AVG_HWY_VELOCITY
-            carProbDensity = NTuple{3,NormalDist}((NormalDist(init_x, 0.1), NormalDist(init_y, LANE_WIDTH/6.0), NormalDist(init_xdot, VEL_STD_DEV)))
-            intentionArray = zeros(Float64, numLanes)
-            intentionArray[ln] = 0.7
-            intentionArray[ln+1] = 0.3
-            carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
-            if !collision(initSt, carState)
-              push!(neighborhood[ln], carState)
-              break
-            end
-          end
+          init_x = lb_x + (egoDist - 1 + idx-2) * cell_length + rand(rng) * cell_length  #mean of initial x
+          init_y = getLaneCenter(rs, ln) #(ln - 1) * LANE_WIDTH + LANE_WIDTH/2.0   #mean of initial y
+          init_xdot = AVG_HWY_VELOCITY
+          carProbDensity = NTuple{3,NormalDist}((NormalDist(init_x, 0.1), NormalDist(init_y, LANE_WIDTH/6.0), NormalDist(init_xdot, VEL_STD_DEV)))
+          intentionArray = zeros(Float64, numLanes)
+          intentionArray[ln] = 0.7
+          intentionArray[ln+1] = 0.3
+          carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
+          push!(neighborhood[ln], carState)
         end
       end
     else            # other lanes: random population or empty

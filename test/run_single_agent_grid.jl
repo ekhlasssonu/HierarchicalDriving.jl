@@ -2,6 +2,8 @@ using HierarchicalDriving
 using POMDPToolbox
 using DiscreteValueIteration
 
+using JLD
+
 println("Testing SingleAgentGridMDP")
 
 p = SingleAgentGridMDP()
@@ -16,9 +18,16 @@ end
 println("random: $(rsum/N)")
 
 solver = ValueIterationSolver()
-policy = solve(solver, p, verbose=true)
+policy = solve(solver, p, verbose=false)
+#println(typeof(policy))
+println("Policy:")
+println(policy)
+#println("Simulating: ")
 rsum = 0.0
 for i in 1:N
+  #println("Simulation# ", i)
     rsum += simulate(sim, p, policy)
 end
 println("value iteration: $(rsum/N)")
+
+save("../scratch/SingleAgentGridPolicy.jld", "policy", policy)

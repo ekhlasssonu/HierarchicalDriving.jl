@@ -4,16 +4,16 @@
 type FSM_Node{T}
   nodeLabel::T
 end
-=={T}(a::FSM_Node{T}, b::FSM_Node{T}) = (a.nodeLabel == b.nodeLabel)
-Base.hash{T}(a::FSM_Node{T}, h::UInt64=zero(UInt64)) = hash(a.nodeLabel, h)
-Base.copy{T}(a::FSM_Node{T}) = FSM_Node{T}(a.nodeLabel)
+==(a::FSM_Node, b::FSM_Node) = (a.nodeLabel == b.nodeLabel)
+Base.hash(a::FSM_Node, h::UInt64=zero(UInt64)) = hash(a.nodeLabel, h)
+Base.copy(a::FSM_Node) = FSM_Node(a.nodeLabel)
 
 type FSM_Edge{T}
   edgeLabel::T
 end
-=={T}(a::FSM_Edge{T}, b::FSM_Edge{T}) = (a.edgeLabel == b.edgeLabel)
-Base.hash{T}(a::FSM_Edge{T},h::UInt64=zero(UInt64)) = hash(a.edgeLabel,h)
-Base.copy{T}(a::FSM_Edge{T}) = FSM_Edge{T}(a.edgeLabel)
+==(a::FSM_Edge, b::FSM_Edge) = (a.edgeLabel == b.edgeLabel)
+Base.hash(a::FSM_Edge,h::UInt64=zero(UInt64)) = hash(a.edgeLabel,h)
+Base.copy(a::FSM_Edge) = FSM_Edge(a.edgeLabel)
 
 type FSM{N,A,E}
   nodeSet::Array{FSM_Node{N},1}
@@ -24,6 +24,6 @@ type FSM{N,A,E}
   #Map node, edge, node to transition probability
   transitionProb::Dict{Tuple{FSM_Node{N}, FSM_Edge{E}, FSM_Node{N}}, Float64}
 end
-=={N,A,E}(a::FSM{N,A,E}, b::FSM{N,A,E}) = (a.nodeSet == b.nodeSet) && (a.edgeLabels == b.edgeLabels) && (a.actionProb == b.actionProb) && (a.transitionProb == b.transitionProb)
-Base.hash{N,A,E}(a::FSM{N,A,E}, h::UInt64=zero(UInt64)) = hash(a.nodeSet, hash(a.edgeLabels, hash(a.actionProb, hash(a.transitionProb,h))))
-Base.copy{N,A,E}(a::FSM{N,A,E}) = FSM{N,A,E}(a.nodeSet, a.edgeLabels, a.actionProb, a.transitionProb)
+==(a::FSM, b::FSM) = (a.nodeSet == b.nodeSet) && (a.edgeLabels == b.edgeLabels) && (a.actionProb == b.actionProb) && (a.transitionProb == b.transitionProb)
+Base.hash(a::FSM, h::UInt64=zero(UInt64)) = hash(a.nodeSet, hash(a.edgeLabels, hash(a.actionProb, hash(a.transitionProb,h))))
+Base.copy(a::FSM) = FSM(a.nodeSet, a.edgeLabels, a.actionProb, a.transitionProb)

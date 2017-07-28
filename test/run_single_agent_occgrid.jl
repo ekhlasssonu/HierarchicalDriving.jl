@@ -2,6 +2,8 @@ using HierarchicalDriving
 using POMDPToolbox
 using DiscreteValueIteration
 
+using JLD
+
 println("Testing SingleAgentOccGridMDP")
 
 p = SingleAgentOccGridMDP(50, road_segment, 24, 100.0, "../scratch/TranProb_Heur.jld", "../scratch/ActionRwd_Heur.jld")
@@ -46,8 +48,15 @@ println("random: $(rsum/N)")
 
 solver = ValueIterationSolver()
 policy = solve(solver, p, verbose=true)
+println(typeof(policy))
+println("Policy:")
+println(policy)
+println("Simulating: ")
 rsum = 0.0
 for i in 1:N
+  println("Simulation# ", i)
     rsum += simulate(sim, p, policy)
 end
 println("value iteration: $(rsum/N)")
+
+save("../scratch/SingleAgentOccGridPolicy.jld", "policy", policy)

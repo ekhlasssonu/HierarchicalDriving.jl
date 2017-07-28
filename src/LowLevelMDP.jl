@@ -106,12 +106,6 @@ end
 
 function sortbyx(cars_in_the_lane::Array{CarLocalIS,1})
   sorted = Array{CarLocalIS,1}()
-  #=
-  print("Unsorted: ")
-  for carIS in cars_in_the_lane
-    print(carIS.physicalState.state[1]," ")
-  end
-  =#
   for carIS in cars_in_the_lane
     carPhySt = carIS.physicalState
     x = carPhySt.state[1]
@@ -135,13 +129,6 @@ function sortbyx(cars_in_the_lane::Array{CarLocalIS,1})
       append!(sorted,temp)
     end
   end
-  #=
-  print(" Sorted: ")
-  for carIS in sorted
-    print(carIS.physicalState.state[1]," ")
-  end
-  println()
-  =#
   return sorted
 end
 function sortintolanes(neighborhood::Array{Array{CarLocalIS,1},1}, p::LowLevelMDP)
@@ -389,7 +376,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
 
       #println("cNode = ",currNode.nodeLabel," edgeLabel = ",edgeLabel, " nNode = ",updatedNode.nodeLabel)
       updatedModel = ParamCarModelL0(targetLane, updatedFrame, updatedNode)
-      updatedIS = CarLocalIS(updatedCarPhySt, updatedModel)
+      updatedIS = CarLocalIS{ParamCarModelL0}(updatedCarPhySt, updatedModel)
       push!(updatedNeighborhood[ln], updatedIS)
 
       ldCarIS = carIS

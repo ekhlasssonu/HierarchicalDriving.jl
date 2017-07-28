@@ -9,19 +9,20 @@ using MCTS
 # import MCVI: init_lower_action, lower_bound, upper_bound
 
 using POMDPModels # for LightDark1d
-
+using POMDPToolbox
 
 #include("nb_cache.jl")
 
 #@time include("run_gen_ul_tran.jl")
 
-include("run_single_agent_occgrid.jl")
+#include("run_single_agent_grid.jl")
 
+#include("run_single_agent_occgrid.jl")
+
+include("../scratch/typewarning.jl")
 # write your own tests here
 #@test 1 == 2
 #include("run_random.jl")
-
-#include("run_single_agent_grid.jl")
 
 #include("run_mcts.jl")
 

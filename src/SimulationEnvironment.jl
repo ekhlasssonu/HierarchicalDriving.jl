@@ -16,7 +16,7 @@ SimulationMDP() = SimulationMDP(0.9, 0.2, 40,
                                   getFrameList() )
 
 discount(p::SimulationMDP) = p.discount_factor
-function isterminal(p::SimulationMDP, st::GlobalStateL1{CarLocalIS{ParamCarModelL0}})
+function isterminal(p::SimulationMDP, st::GlobalStateL1)
   st.terminal > 0 ? true : false
 end
 n_actions(p::SimulationMDP) = length(actions(p))

@@ -47,7 +47,11 @@ export LowLevelMDP,
         SAOccGridDist,
         iterator,
         checkProb,
-        normalize_egoTranProb
+        normalize_egoTranProb,
+        FSM_Node,
+        FSM_Edge,
+        FSM,
+        createFSM
 
 include("FSM.jl")
 include("Roadway.jl")

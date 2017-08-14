@@ -31,3 +31,8 @@ end
 println("value iteration: $(rsum/N)")
 
 save("../scratch/SingleAgentGridPolicy.jld", "policy", policy)
+
+println(states(p))
+
+policy2 = load("../scratch/SingleAgentGridPolicy.jld", "policy")
+println(states(policy2.mdp))

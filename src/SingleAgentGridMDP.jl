@@ -3,21 +3,20 @@
     distance::Int # increases as car travels
 end
 
-@with_kw immutable SingleAgentGridMDP <: POMDPs.MDP{AgentGridLocation, Int}
-    roadSegment::RoadSegment= road_segment #RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH])
-    n_v_cells::Int64        = 8
-    timestep::Float64       = 3.0
+immutable SingleAgentGridMDP <: POMDPs.MDP{AgentGridLocation, Int}
+  roadSegment::RoadSegment
+  n_v_cells::Int64
 
-    goal::AgentGridLocation = AgentGridLocation(n_lanes(roadSegment), n_v_cells)      # lane, distance
-    goal_reward::Float64    = 100.0
+  goal::AgentGridLocation
+  goal_reward::Float64
 
-    p_next_cell::Float64    = 0.9
-    p_desired_lane::Float64 = 0.9
+  p_next_cell::Float64
+  p_desired_lane::Float64
 
-    discount::Float64       = 0.9
+  discount::Float64
 end
 
-#speed(p::SingleAgentGridMDP) = p.cell_length/p.timestep
+SingleAgentGridMDP() = SingleAgentGridMDP(road_segment, 8, AgentGridLocation(n_lanes(road_segment), 8), 100.0, 0.9, 0.9, 0.9)
 discount(p::SingleAgentGridMDP) = p.discount
 n_lanes(p::SingleAgentGridMDP) = n_lanes(p.roadSegment)
 isterminal(p::SingleAgentGridMDP, s::AgentGridLocation) = s.distance < 1 || s.distance  > p.goal.distance || s.lane < 1 || s.lane > n_lanes(p)
@@ -31,6 +30,11 @@ function state_index(p::SingleAgentGridMDP, s::AgentGridLocation)
   else
     return sub2ind((n_lanes(p), n_v_cells(p)), s.lane, s.distance)
   end
+end
+
+function get_x_bounds(p::SingleAgentGridMDP, dist::Int64)
+  cellLength = length(p.roadSegment)/p.n_v_cells
+  return (dist-1)*cellLength + p.roadSegment.x_boundary[1], dist * cellLength + p.roadSegment.x_boundary[1]
 end
 
 # actions
@@ -97,3 +101,13 @@ end
 initial_state(p::SingleAgentGridMDP, rng::AbstractRNG) = AgentGridLocation(1, 2)
 
 reward(p::SingleAgentGridMDP, s::AgentGridLocation, a::Int, sp::AgentGridLocation) = sp == p.goal ? p.goal_reward : 0.0
+
+function getCarGridLocation(p::SingleAgentGridMDP, phySt::CarPhysicalState)
+  x = phySt.state[1]
+  y = phySt.state[2]
+  lane = getLaneNo(y, p.roadSegment)
+  cellLength = length(p.roadSegment)/p.n_v_cells
+  x_offset = x - p.roadSegment.x_boundary[1]
+  distance = convert(Int64, ceil(x_offset/cellLength))
+  return AgentGridLocation(lane, distance)
+end

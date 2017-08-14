@@ -1,4 +1,5 @@
-type LowLevelMDP <:POMDPs.MDP{GlobalStateL1, Int64}
+abstract DiscreteActionDrivingMDP <: POMDPs.MDP{GlobalStateL1, Int64}
+type LowLevelMDP <: DiscreteActionDrivingMDP
   discount_factor::Float64
   TIME_STEP::Float64
   HORIZON::Int64
@@ -34,6 +35,9 @@ discount(p::LowLevelMDP) = p.discount_factor
 #  st.terminal > 0 ? true : false
 #end
 function isterminal(p::LowLevelMDP, st::GlobalStateL1)
+  st.terminal > 0 ? true : false
+end
+function isterminal(st::GlobalStateL1)
   st.terminal > 0 ? true : false
 end
 #From actions
@@ -226,7 +230,7 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       carPhySt = carIS.physicalState
       carModel = carIS.model
       carFrame = carModel.frame
-      targetLane = carModel.targetLane
+      targetLane = clamp(carModel.targetLane, 1, numLanes)
       currNode = carModel.currNode
       fsm = carFrame.policy
 
@@ -265,6 +269,11 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       target_y = laneCenters[targetLane]
 
       nextLane = ln
+      #TODO: This is a hack
+      if targetLane == 0
+        targetLane = ln
+      end
+      #End of hack. The targetLane algo should be redone?
       if targetLane > ln
         nextLane = ln+1
       elseif targetLane < ln

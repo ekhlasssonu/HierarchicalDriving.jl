@@ -35,13 +35,19 @@ immutable SingleAgentOccGridMDP <: POMDPs.MDP{ImmGridOccSt, Int}
 end
 
 function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goal_reward::Float64, tranFileName::String, rwdFileName::String)
-  goalCell = AgentGridLocation(n_lanes(roadSegment), n_v_cells)
   tranProb = load(tranFileName, "tranProb")
   r_s_a= load(rwdFileName,  "r_s_a")
   return SingleAgentOccGridMDP(n_agents, roadSegment, n_v_cells,
                                 [AgentGridLocation(n_lanes(roadSegment), n_v_cells),
                                   AgentGridLocation(n_lanes(roadSegment), n_v_cells-1),
                                   AgentGridLocation(n_lanes(roadSegment), n_v_cells-2)],
+                                  goal_reward, tranProb, r_s_a, 0.9)
+end
+
+function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goalCells::Array{AgentGridLocation}, goal_reward::Float64, tranFileName::String, rwdFileName::String)
+  tranProb = load(tranFileName, "tranProb")
+  r_s_a= load(rwdFileName,  "r_s_a")
+  return SingleAgentOccGridMDP(n_agents, roadSegment, n_v_cells, goalCells,
                                   goal_reward, tranProb, r_s_a, 0.9)
 end
 
@@ -82,6 +88,11 @@ function state_index(p::SingleAgentOccGridMDP, s::ImmGridOccSt)
 
     return rtOcc + 8 * ((ltOcc-1) + 8 * (ld_distance + 4 * ((egoDist - 1) + n_v_cells(p) * (egoLane - 1))))
   end
+end
+
+function get_x_bounds(p::SingleAgentOccGridMDP, dist::Int64)
+  cellLength = length(p.roadSegment)/p.n_v_cells
+  return (dist-1)*cellLength + p.roadSegment.x_boundary[1], dist * cellLength + p.roadSegment.x_boundary[1]
 end
 
 actions(p::SingleAgentOccGridMDP) = -1:1
@@ -152,7 +163,7 @@ function rand(rng::AbstractRNG, d::SAOccGridDist)
 
   pr_cell_occupied = n_agents/n_cells #Assuming a random distribution of cars, not accurate but will do
   pr_cell_occupied > 1.0 ? pr_cell_occupied = 1.0 : nothing
-  #TODO: Change this part may be.
+
   nxtEgoLocation = s.egoGrid
   rnd = rand(rng)
   sum = 0.0
@@ -367,6 +378,132 @@ function getCarGridLocation(p::SingleAgentOccGridMDP, phySt::CarPhysicalState)
   x_offset = x - p.roadSegment.x_boundary[1]
   distance = round(Int64, ceil(x_offset/cellLength))
   return AgentGridLocation(lane, distance)
+end
+
+function extractImmGridOccSt(p::SingleAgentOccGridMDP, gblSt::GlobalStateL1)
+  egoState = gblSt.ego
+  egoGridLoc = getCarGridLocation(p, egoState)
+  egoLane = egoGridLoc.lane
+
+  ld_dist = 0
+  occ_l = [false, false, false]
+  occ_r = [false, false, false]
+
+  numLanes = n_lanes(p)
+  ln = egoLane - 1
+  if ln >= 1
+    nbr_indices = binary_search(gblSt.neighborhood[ln], egoState)
+    if nbr_indices != [0,0]
+      if nbr_indices[1] > 0
+        #Leader exists
+        ldrSt = gblSt.neighborhood[ln][nbr_indices[1]].physicalState
+        ldrGridLoc = getCarGridLocation(p, ldrSt)
+        ld_dist = ldrGridLoc.distance - egoGridLoc.distance
+        if ld_dist == 1
+          occ_l[1] = true
+        elseif ld_dist == 0
+          occ_l[2] = true
+          nxt_ldr_idx = nbr_indices[1] - 1
+          if nxt_ldr_idx > 0
+            nxt_ldrSt = gblSt.neighborhood[ln][nxt_ldr_idx].physicalState
+            nxt_ldrGridLoc = getCarGridLocation(p, nxt_ldrSt)
+            nxt_ld_dist = nxt_ldrGridLoc.distance - egoGridLoc.distance
+            if nxt_ld_dist == 1
+              occ_l[1] = true
+            end
+          end
+        end
+      end
+
+      if nbr_indices[2] <= length(gblSt.neighborhood[ln])
+        #Follower exists
+        flrSt = gblSt.neighborhood[ln][nbr_indices[2]].physicalState
+        flrGridLoc = getCarGridLocation(p, flrSt)
+        fl_dist = -flrGridLoc.distance + egoGridLoc.distance
+
+        if fl_dist == 1
+          occ_l[3] = true
+        elseif fl_dist == 0
+          occ_l[2] = true
+          nxt_flr_idx = nbr_indices[2] + 1
+          if nxt_flr_idx <= length(gblSt.neighborhood[ln])
+            nxt_flrSt = gblSt.neighborhood[ln][nxt_flr_idx].physicalState
+            nxt_flrGridLoc = getCarGridLocation(p, nxt_flrSt)
+            nxt_fl_dist = -nxt_flrGridLoc.distance + egoGridLoc.distance
+            if nxt_fl_dist == 1
+              occ_l[3] = true
+            end
+          end
+        end
+      end
+    end
+  end
+
+  ln = egoLane
+  nbr_indices = binary_search(gblSt.neighborhood[ln], egoState)
+  if nbr_indices[1] < 1
+    ld_dist = size(p.egoTranProb)[2]-1
+  else
+    ldrSt = gblSt.neighborhood[ln][nbr_indices[1]].physicalState
+    ldrGridLoc = getCarGridLocation(p, ldrSt)
+    ld_dist = ldrGridLoc.distance - egoGridLoc.distance
+    if ld_dist > size(p.egoTranProb)[2]-1
+      ld_dist = size(p.egoTranProb)[2]-1
+    end
+  end
+
+
+
+  ln = egoLane + 1
+  if ln <= numLanes
+    nbr_indices = binary_search(gblSt.neighborhood[ln], egoState)
+    if nbr_indices != [0,0]
+      if nbr_indices[1] > 0
+        #Leader exists
+        ldrSt = gblSt.neighborhood[ln][nbr_indices[1]].physicalState
+        ldrGridLoc = getCarGridLocation(p, ldrSt)
+        ld_dist = ldrGridLoc.distance - egoGridLoc.distance
+        if ld_dist == 1
+          occ_r[1] = true
+        elseif ld_dist == 0
+          occ_r[2] = true
+          nxt_ldr_idx = nbr_indices[1] - 1
+          if nxt_ldr_idx > 0
+            nxt_ldrSt = gblSt.neighborhood[ln][nxt_ldr_idx].physicalState
+            nxt_ldrGridLoc = getCarGridLocation(p, nxt_ldrSt)
+            nxt_ld_dist = nxt_ldrGridLoc.distance - egoGridLoc.distance
+            if nxt_ld_dist == 1
+              occ_r[1] = true
+            end
+          end
+        end
+      end
+
+      if nbr_indices[2] <= length(gblSt.neighborhood[ln])
+        #Follower exists
+        flrSt = gblSt.neighborhood[ln][nbr_indices[2]].physicalState
+        flrGridLoc = getCarGridLocation(p, flrSt)
+        fl_dist = -flrGridLoc.distance + egoGridLoc.distance
+
+        if fl_dist == 1
+          occ_r[3] = true
+        elseif fl_dist == 0
+          occ_r[2] = true
+          nxt_flr_idx = nbr_indices[2] + 1
+          if nxt_flr_idx <= length(gblSt.neighborhood[ln])
+            nxt_flrSt = gblSt.neighborhood[ln][nxt_flr_idx].physicalState
+            nxt_flrGridLoc = getCarGridLocation(p, nxt_flrSt)
+            nxt_fl_dist = -nxt_flrGridLoc.distance + egoGridLoc.distance
+            if nxt_fl_dist == 1
+              occ_r[3] = true
+            end
+          end
+        end
+      end
+    end
+  end
+
+  return ImmGridOccSt(egoGridLoc, ld_dist, (occ_l...), (occ_r...))
 end
 
 function normalize_egoTranProb(p::SingleAgentOccGridMDP)

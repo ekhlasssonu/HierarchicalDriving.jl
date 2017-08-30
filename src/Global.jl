@@ -114,10 +114,11 @@ Generate state
 =#
 function randCarPhysicalState(rng::AbstractRNG, d::NTuple{3,NormalDist})
   x = d[1].mean + randn(rng) * d[1].std
+  #x = d[1].mean - d[1].std + 2 * rand(rng) * d[1].std
 
   y = d[2].mean
   y_noise = randn(rng) * d[2].std
-  y_noise >  (LANE_WIDTH/2.0) ? (y_noise = (LANE_WIDTH/2.0)) : (y_noise < -LANE_WIDTH/2.0) ? (y_noise = -LANE_WIDTH/2.0) : nothing
+  y_noise >  (LANE_WIDTH/3.0) ? (y_noise = (LANE_WIDTH/3.0)) : (y_noise < -LANE_WIDTH/3.0) ? (y_noise = -LANE_WIDTH/3.0) : nothing
   y += y_noise
 
   xdot = d[3].mean

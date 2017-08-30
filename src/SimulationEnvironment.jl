@@ -15,16 +15,28 @@ type SimulationMDP <: DiscreteActionDrivingMDP
   frameList::Array{LowLevelCarFrameL0,1}
 end
 
-SimulationMDP() = SimulationMDP(0.99, 0.3, 60, 40,
-                                  RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH]),
-                                  CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                                  (CarPhysicalState((425.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 2.5)),
-                                   CarPhysicalState((500.0, 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 2.5))),
-                                  ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
+SimulationMDP() = SimulationMDP(0.99, ll_TIME_STEP, ul_HORIZON, ul_n_agents,
+                        road_segment,
+                        CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 5.0))),
+                        ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
+
+SimulationMDP(n_agents::Int64) = SimulationMDP(0.99, ll_TIME_STEP, ul_HORIZON, n_agents,
+                        road_segment,
+                        CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 5.0))),
+                        ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
+
+
+
 
 discount(p::SimulationMDP) = p.discount_factor
 function isterminal(p::SimulationMDP, st::GlobalStateL1)
-  st.terminal > 0 ? true : false
+  a = st.terminal > 0 ? true : false
+  b = st.ego.state[1] > p.roadSegment.x_boundary[2] ? true : false
+  return a || b
 end
 n_actions(p::SimulationMDP) = length(actions(p))
 actions(::SimulationMDP) = EgoActionSpace()
@@ -45,6 +57,12 @@ function getLaneCenter(phySt::CarPhysicalState, p::SimulationMDP)
   return getLaneCenter(p.roadSegment, laneNo)
 end
 
+function get_distance_from_lane_center(phySt::CarPhysicalState, p::SimulationMDP)
+  laneNo = getLaneNo(phySt, p)
+  laneCenter = getLaneCenter(p.roadSegment, laneNo)
+  return abs(phySt.state[2] - laneCenter)
+end
+
 function printState(p::SimulationMDP, s::GlobalStateL1)
   egoState = s.ego
   egoLane = getLaneNo(egoState, p)
@@ -62,12 +80,12 @@ function printState(p::SimulationMDP, s::GlobalStateL1)
   end
 end
 
-function printGlobalPhyState(s::GlobalStateL1, p::SimulationMDP)
+function printGlobalPhyState(s::GlobalStateL1, rSeg::RoadSegment)
   egoState = s.ego
-  egoLane = getLaneNo(egoState, p)
+  egoLane = getLaneNo(egoState.state[2], rSeg)
   for ln in 1:length(s.neighborhood)
     print("Lane No.: $ln ")
-    colNo = -100
+    colNo = convert(Int64, rSeg.x_boundary[1])
     carNo = length(s.neighborhood[ln])
     egoPrinted = false
     for carNo in length(s.neighborhood[ln]):-1:1
@@ -398,6 +416,8 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
   ddot_x = get_idm_accln(is.model.frame.longitudinal, xdot, dxdot, g)
 
+  ddot_x < -6.0 ? ddot_x = -6.0 : nothing
+
   y = carPhySt.state[2]
 
   #println("\t\t\t carLane = $carLane targetLane = $targetLane")
@@ -587,7 +607,7 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::SimulationMDP)
     g = egoState.state[1] - x - CAR_LENGTH
 
     ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
-    if ddotx < -6.0
+    if ddotx <= -6.0
       return true
     end
     break # Only interested in car immediately behind ego car.
@@ -625,13 +645,14 @@ function generate_s(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::AbstractR
 end
 
 function reward(p::SimulationMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
-  actionSet = EgoActionSpace()
-  act = actionSet.actions[a]
-  if (s.terminal > 0 )
+  if (s.terminal > 0 || a < 1 || a > n_actions(p))
     #println("End reward")
     #println("Reward = ", 0.0)
     return 0.0
   end
+
+  actionSet = EgoActionSpace()
+  act = actionSet.actions[a]
 
   targetLB = p.egoTargetState[1]
   targetUB = p.egoTargetState[2]
@@ -684,7 +705,7 @@ function populate_lane_x_positions(x_boundary::NTuple{2,Float64}, agents_per_lan
   x_ub = x_boundary[2]
   x_lb = x_boundary[1]
   avg_dist = (x_ub-x_lb)/agents_per_lane
-  push!(x_positions, x_ub - (avg_dist/4.0 * rand(rng))) #Some random distance from x_ub
+  push!(x_positions, x_ub - (avg_dist/2.0 * rand(rng))) #Some random distance from x_ub
   for ag in 2:agents_per_lane
     gap = avg_dist
     next_x = x_positions[end] - gap
@@ -717,7 +738,7 @@ function initial_state_distribution(p::SimulationMDP, rng::AbstractRNG)
       if (ln == egoLane) && (abs(ego_x - x_positions[carId]) < CAR_LENGTH)
         continue
       end
-      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], AVG_GAP/9.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       push!(probDensity[ln], carDist)
     end
   end
@@ -801,16 +822,18 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   g = ldrPhySt.state[1] - x - CAR_LENGTH
 
   ddot_x = get_idm_accln(lon, xdot, dxdot, g)
+  #print("ddot_x = ",ddot_x)
 
   if ddot_x < -4.0
     ddot_x = -6.0
-  elseif ddot_x < -1.0
+  elseif ddot_x < 0.0
     ddot_x = -2.0
-  elseif ddot_x < 2.0
+  elseif ddot_x < 1.0
     ddot_x = 0.0
   else
     ddot_x = 2.0
   end
+  #print(" ddot_x = ",ddot_x)
 
   rnd = Base.rand(si_policy.rng)
   ydotCumProb = [0.0,0.0,0.0]
@@ -864,13 +887,16 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   else
     ydot = 0.0
   end
-  updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, si_policy.rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+  #updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, si_policy.rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+
+  #println("Ego Lane = $egoLane, Target Lane = $targetLane, y = $y, target y = $target_y")
 
   edgeLabel = "Undetermined"
   if egoLane == targetLane
-    if (abs(target_y - y) < LANE_WIDTH/16.0)
+    if (abs(target_y - y) < 0.5)
       edgeLabel = "Reached"
       targetLane = 0 #Should reflect in original, ready for next transition, handled later
+      #println("Reached. targetLane = 0")
     else
       edgeLabel = "SafeSmooth"
     end

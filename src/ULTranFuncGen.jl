@@ -5,7 +5,7 @@ type SingleAgentOccGridMDP_TGenerator #Bad name
   frameList::Array{LowLevelCarFrameL0,1}
 end
 
-SingleAgentOccGridMDP_TGenerator(road_segment::RoadSegment, cell_length::Float64) = SingleAgentOccGridMDP_TGenerator(road_segment::RoadSegment, cell_length::Float64, getFrameList())
+SingleAgentOccGridMDP_TGenerator(road_segment::RoadSegment, cell_length::Float64) = SingleAgentOccGridMDP_TGenerator(road_segment, cell_length, getFrameList())
 
 function getCarGridLocation(gen::SingleAgentOccGridMDP_TGenerator, phySt::CarPhysicalState)
   x = phySt.state[1]
@@ -37,10 +37,10 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
   fin_y_ub = fin_y + 0.5
 
   fin_x_lb = lb_x + egoDist * cell_length
-  fin_x_ub = lb_x + (egoDist + 4) * cell_length
+  fin_x_ub = lb_x + (egoDist + 3) * cell_length
 
-  finSt_lb = CarPhysicalState((fin_x_lb, fin_y_lb, AVG_HWY_VELOCITY - VEL_STD_DEV))
-  finSt_ub = CarPhysicalState((fin_x_ub, fin_y_ub, AVG_HWY_VELOCITY + VEL_STD_DEV))
+  finSt_lb = CarPhysicalState((fin_x_lb, fin_y_lb, AVG_HWY_VELOCITY - 5.0))
+  finSt_ub = CarPhysicalState((fin_x_ub, fin_y_ub, AVG_HWY_VELOCITY + 5.0))
 
   llMDP = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON, rs, initSt, (finSt_lb, finSt_ub),
                           ll_goalReward, ll_collisionCost, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
@@ -48,68 +48,67 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
   #Generate initial global state for llMDP
   #ego state is initSt
   neighborhood = Array{Array{CarLocalIS,1}}(numLanes)
-
   for i in 1:numLanes
     neighborhood[i] = Array{CarLocalIS,1}()
   end
-  for ln in 1:numLanes
-    if ln == egoLane + 1      #left lane: use occ_lt
-      occ_lt = [ulInitState.occ_l...]
-      for idx in length(occ_lt):-1:1
-        present = occ_lt[idx]
-        if present
-          while true
-            init_x = lb_x + (egoDist - 1 + idx-2) * cell_length + rand(rng) * cell_length  #mean of initial x
-            init_y = getLaneCenter(rs, ln) #(ln - 1) * LANE_WIDTH + LANE_WIDTH/2.0   #mean of initial y
-            init_xdot = AVG_HWY_VELOCITY
-            carProbDensity = NTuple{3,NormalDist}((NormalDist(init_x, 0.1), NormalDist(init_y, LANE_WIDTH/6.0), NormalDist(init_xdot, VEL_STD_DEV)))
-            intentionArray = zeros(Float64, numLanes)
-            intentionArray[ln] = 0.7
-            intentionArray[ln-1] = 0.3
-            carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
-            collision(initSt, carSta)
-          end
-          push!(neighborhood[ln], carState)
-        end
-      end
 
-    elseif ln == egoLane  #same lane: use occ_rt
-      ld_dist = ulInitState.ld_distance
-      #Ensure that the initial state is not a collison state
-      while true
-        init_x = lb_x + (egoDist - 1 + ld_dist + rand(rng)) * cell_length
-        abs(init_x - initSt.state[1]) > 2 * CAR_LENGTH && break
-      end
-      init_y = getLaneCenter(rs, ln) #(ln - 1) * LANE_WIDTH + LANE_WIDTH/2.0
-      init_xdot = AVG_HWY_VELOCITY
-      carProbDensity = NTuple{3,NormalDist}((NormalDist(init_x, 0.1), NormalDist(init_y, LANE_WIDTH/6.0), NormalDist(init_xdot, VEL_STD_DEV)))
-      intentionArray = zeros(Float64, numLanes)
-      ln - 1 > 0 ? intentionArray[ln-1] += 0.3 : intentionArray[ln] += 0.3
-      intentionArray[ln] += 0.4
-      ln + 1 <= numLanes ? intentionArray[ln+1] += 0.3 : intentionArray[ln] += 0.3
-      carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
-      push!(neighborhood[ln], carState)
+  #leader
+  ldr_x = init_x + 2*CAR_LENGTH + (ulInitState.ld_distance + rand(rng)) * cell_length #lb_x + (1.0 * ldr_grid.distance - 1 + rand(rng)) * cell_length
+  ldr_y = getLaneCenter(rs, egoLane)
+  ldrProbDist = NTuple{3,NormalDist}((NormalDist(ldr_x, 0.1), NormalDist(ldr_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+  intentionArray = zeros(Float64, numLanes)
+  egoLane - 1 > 0 ? intentionArray[egoLane-1] += 0.3 : intentionArray[egoLane] += 0.3
+  intentionArray[egoLane] += 0.4
+  egoLane + 1 <= numLanes ? intentionArray[egoLane+1] += 0.3 : intentionArray[egoLane] += 0.3
+  ldrState = randCarLocalISL0(rng, ldrProbDist, intentionArray, gen.frameList)
+  push!(neighborhood[egoLane], ldrState)
 
-    elseif ln == egoLane - 1  # right lane: use ld_distance
-      occ_rt = [ulInitState.occ_r...]
-      for idx in length(occ_rt):-1:1
-        present = occ_rt[idx]
-        if present
-          init_x = lb_x + (egoDist - 1 + idx-2) * cell_length + rand(rng) * cell_length  #mean of initial x
-          init_y = getLaneCenter(rs, ln) #(ln - 1) * LANE_WIDTH + LANE_WIDTH/2.0   #mean of initial y
-          init_xdot = AVG_HWY_VELOCITY
-          carProbDensity = NTuple{3,NormalDist}((NormalDist(init_x, 0.1), NormalDist(init_y, LANE_WIDTH/6.0), NormalDist(init_xdot, VEL_STD_DEV)))
-          intentionArray = zeros(Float64, numLanes)
-          intentionArray[ln] = 0.7
-          intentionArray[ln+1] = 0.3
-          carState = randCarLocalISL0(rng, carProbDensity, intentionArray, gen.frameList)
-          push!(neighborhood[ln], carState)
-        end
+  #Right occupancy
+  if egoLane-1 > 0
+    occ_rt = ulInitState.occ_r
+    adj_idx = convert(Int64, floor(length(occ_rt)/2))+1
+    for i in 1:length(occ_rt)
+      i_distance = egoDist + (-1)^(i) * convert(Int64, floor(i/2))
+      i_idx = adj_idx - (-1)^(i) * convert(Int64, floor(i/2))
+      if occ_rt[i_idx]
+        i_lane = egoLane-1
+        i_x = lb_x + ((i_distance - 1) + rand(rng)) * cell_length
+        i_y = getLaneCenter(rs, i_lane)
+        i_ProbDist = NTuple{3,NormalDist}((NormalDist(i_x, 0.1), NormalDist(i_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+
+        intentionArray = zeros(Float64, numLanes)
+        i_lane - 1 > 0 ? intentionArray[i_lane-1] += 0.3 : intentionArray[i_lane] += 0.3
+        intentionArray[i_lane] += 0.4
+        i_lane + 1 <= numLanes ? intentionArray[i_lane+1] += 0.3 : intentionArray[i_lane] += 0.3
+        ldrState = randCarLocalISL0(rng, i_ProbDist, intentionArray, gen.frameList)
+        push!(neighborhood[i_lane], ldrState)
       end
-    else            # other lanes: random population or empty
-      nothing
     end
   end
+
+  #LeftOccupancy
+  if egoLane+1 <= numLanes
+    occ_lt = ulInitState.occ_l
+    adj_idx = convert(Int64, floor(length(occ_lt)/2))+1
+    for i in 1:length(occ_lt)
+      i_distance = egoDist + (-1)^(i) * convert(Int64, floor(i/2))
+      i_idx = adj_idx - (-1)^(i) * convert(Int64, floor(i/2))
+      if occ_lt[i_idx]
+        i_lane = egoLane+1
+        i_x = lb_x + ((i_distance - 1) + rand(rng)) * cell_length
+        i_y = getLaneCenter(rs, i_lane)
+        i_ProbDist = NTuple{3,NormalDist}((NormalDist(i_x, 0.1), NormalDist(i_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+
+        intentionArray = zeros(Float64, numLanes)
+        i_lane - 1 > 0 ? intentionArray[i_lane-1] += 0.3 : intentionArray[i_lane] += 0.3
+        intentionArray[i_lane] += 0.4
+        i_lane + 1 <= numLanes ? intentionArray[i_lane+1] += 0.3 : intentionArray[i_lane] += 0.3
+        ldrState = randCarLocalISL0(rng, i_ProbDist, intentionArray, gen.frameList)
+        push!(neighborhood[i_lane], ldrState)
+      end
+    end
+  end
+
   initGblSt = GlobalStateL1(0, initSt, neighborhood)
   return (llMDP, initGblSt)
 end

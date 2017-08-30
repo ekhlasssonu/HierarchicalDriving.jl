@@ -10,15 +10,20 @@ CAR_WIDTH = 2.5
 LONG_ACCLN = 2.0
 LAT_VEL = 2.0
 
-road_segment = RoadSegment((-100.0, 500.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH])
+road_segment = RoadSegment((-200.0, 1000.0),[0.0, LANE_WIDTH, 2.0 * LANE_WIDTH, 3.0 * LANE_WIDTH, 4.0 * LANE_WIDTH])
 
 #LowLevelMDP parameters
 ll_discount = 0.99
 ll_TIME_STEP = 0.3
-ll_HORIZON = 13
+ll_HORIZON = 15
 ll_goalReward = 50.0
 ll_collisionCost = -500.0
-ll_y_dev_cost = -1.0
+ll_y_dev_cost = -2.0
 ll_hardbrakingCost = -5.0
 ll_discomfortCost = -5.0
-ll_velocityDeviationCost = -1.0
+ll_velocityDeviationCost = -0.0
+
+ul_HORIZON = ll_HORIZON * 7
+ul_TIME_STEP = 4.0
+
+ul_n_agents = 60

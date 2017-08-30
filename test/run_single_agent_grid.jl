@@ -6,7 +6,7 @@ using JLD
 
 println("Testing SingleAgentGridMDP")
 
-p = SingleAgentGridMDP()
+p = SingleAgentGridMDP(75.0)
 
 sim = RolloutSimulator()
 
@@ -32,7 +32,8 @@ println("value iteration: $(rsum/N)")
 
 save("../scratch/SingleAgentGridPolicy.jld", "policy", policy)
 
-println(states(p))
+#println(states(p))
 
-policy2 = load("../scratch/SingleAgentGridPolicy.jld", "policy")
-println(states(policy2.mdp))
+#policy2 = load("../scratch/SingleAgentGridPolicy.jld", "policy")
+#println(states(policy2.mdp))
+println("run_single_agent_grid.jl executed")

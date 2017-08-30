@@ -17,7 +17,7 @@ type HDVis
     camera::Camera
 end
 
-function HDVis(problem, state; overlays=[CarVelOverlay(), CarIDOverlay], camera=CarFollowCamera{Int}(0, 6.0))
+function HDVis(problem, state; overlays=[CarVelOverlay(), CarIDOverlay()], camera=CarFollowCamera{Int}(0, 6.0))
     return HDVis(problem, state, overlays, camera)
 end
 

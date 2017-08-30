@@ -5,6 +5,7 @@ end
 
 immutable SingleAgentGridMDP <: POMDPs.MDP{AgentGridLocation, Int}
   roadSegment::RoadSegment
+  cellLength::Float64
   n_v_cells::Int64
 
   goal::AgentGridLocation
@@ -16,7 +17,17 @@ immutable SingleAgentGridMDP <: POMDPs.MDP{AgentGridLocation, Int}
   discount::Float64
 end
 
-SingleAgentGridMDP() = SingleAgentGridMDP(road_segment, 8, AgentGridLocation(n_lanes(road_segment), 8), 100.0, 0.9, 0.9, 0.9)
+function SingleAgentGridMDP()
+  cellLength = 80 #m
+  roadLength = length(road_segment)
+  n_v_cells = convert(Int64, ceil(roadLength/cellLength))
+  return SingleAgentGridMDP(road_segment, cellLength, n_v_cells, AgentGridLocation(n_lanes(road_segment), n_v_cells), 100.0, 0.7, 0.7, 0.9)
+end
+function SingleAgentGridMDP(cellLength::Float64)
+  roadLength = length(road_segment)
+  n_v_cells = convert(Int64, ceil(roadLength/cellLength))
+  return SingleAgentGridMDP(road_segment, cellLength, n_v_cells, AgentGridLocation(n_lanes(road_segment), n_v_cells), 100.0, 0.9, 0.9, 0.9)
+end
 discount(p::SingleAgentGridMDP) = p.discount
 n_lanes(p::SingleAgentGridMDP) = n_lanes(p.roadSegment)
 isterminal(p::SingleAgentGridMDP, s::AgentGridLocation) = s.distance < 1 || s.distance  > p.goal.distance || s.lane < 1 || s.lane > n_lanes(p)

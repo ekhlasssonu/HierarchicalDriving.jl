@@ -35,10 +35,10 @@ discount(p::LowLevelMDP) = p.discount_factor
 #  st.terminal > 0 ? true : false
 #end
 function isterminal(p::LowLevelMDP, st::GlobalStateL1)
-  st.terminal > 0 ? true : false
+  st.terminal == 1 ? true : false #For planning purpose, keep only collision as termination criteria
 end
 function isterminal(st::GlobalStateL1)
-  st.terminal > 0 ? true : false
+  st.terminal == 1 ? true : false
 end
 #From actions
 n_actions(p::LowLevelMDP) = length(actions(p))
@@ -80,6 +80,7 @@ function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP)
   egoState = gblISL1.ego
   y = egoState.state[2]
   if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+    #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
     return true
   end
   nbrhood = gblISL1.neighborhood
@@ -196,7 +197,7 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::LowLevelMDP)
     g = egoState.state[1] - x - CAR_LENGTH
 
     ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
-    if ddotx < -6.0
+    if ddotx <= -6.0
       return true
     end
     break # Only interested in car immediately behind ego car.
@@ -263,6 +264,8 @@ function updateNeighborState(globalISL1::GlobalStateL1, p::LowLevelMDP, rng::Abs
       end
 
       ddotx = get_idm_accln(carIS.model.frame.longitudinal, xdot, dxdot, g)
+
+      ddotx < -6.0 ? ddotx = -6.0 : nothing
 
       #Compute ydot
       y = carPhySt.state[2]
@@ -416,15 +419,22 @@ function initial_state_distribution(p::LowLevelMDP)
     probDensity[ln] = Array{NTuple{3, NormalDist},1}()
     mean_y = laneCenters[ln]
 
-    if abs(ln - egoLane)%2 == 1
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-    else
+    if ln == egoLane
       ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+    elseif abs(ln - egoLane)%2 == 1
+      #ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + 0.0, 25.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, 1.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+    else
+      #ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, 1.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - 0.0, 25.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     end
     push!(probDensity[ln], ldCarDist)
-    push!(probDensity[ln], flCarDist)
+    #push!(probDensity[ln], flCarDist)
   end
   return CarNormalDist{LowLevelMDP}(p, probDensity)
 end
@@ -442,7 +452,7 @@ function rand(rng::AbstractRNG, d::CarNormalDist{LowLevelMDP})
   for ln in 1:numLanes
     for carProbDensity in d.probDensity[ln]
       rnd = rand(rng)
-      if (rnd > 0.4)
+      if (rnd > 0.0)
         intentionArray = zeros(Float64, numLanes)
         intentionArray[ln] = 0.4
         if ln-1 > 0
@@ -472,7 +482,7 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
   #println("Begin generate_s")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if s.terminal > 0
+  if s.terminal == 1
     #println("End generate_s")
     return s
   end
@@ -481,9 +491,9 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
     #println("Collision generate_s")
     return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood)
   end
-  if checkTargetCoordinates(s,p)
-    return GlobalStateL1(2, CarPhysicalState(s.ego.state), s.neighborhood)
-  end
+  #if checkTargetCoordinates(s,p)
+  #  return GlobalStateL1(2, CarPhysicalState(s.ego.state), s.neighborhood)
+  #end
 
   #println("Begin update egoState", s.ego)
   egoState = propagateCar(s.ego, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
@@ -491,6 +501,9 @@ function generate_s(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG
   neighborhood = updateNeighborState(s, p, rng)
   #println("End update neighborhood")
   sp = GlobalStateL1(0, egoState, neighborhood)
+  if s.terminal == 2 || checkTargetCoordinates(s,p)  #If initial state was already a success state
+    sp.terminal = 2
+  end
   return sp
 end
 
@@ -500,7 +513,7 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   #println("Begin reward")
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
-  if (s.terminal > 0 )
+  if (s.terminal == 1 )
     #println("End reward")
     #println("Reward = ", 0.0)
     return 0.0
@@ -517,7 +530,7 @@ function reward(p::LowLevelMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
     return p.collisionCost
   end
 
-  if checkTargetCoordinates(s,p)
+  if checkTargetCoordinates(s,p) && s.terminal == 0
     reward += p.goalReward
   end
 

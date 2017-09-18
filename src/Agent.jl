@@ -32,7 +32,7 @@ CarPhysicalState(st::CarPhysicalState) = CarPhysicalState(st.state)
 Base.hash(s::CarPhysicalState, h::UInt64=zero(UInt64)) = hash(s.state,h)
 Base.copy(s::CarPhysicalState) = CarPhysicalState(s.state)
 
-collision(s1::CarPhysicalState, s2::CarPhysicalState) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH)
+collision(s1::CarPhysicalState, s2::CarPhysicalState, safetyDist::Float64=0.0) = (abs(s1.state[1] - s2.state[1]) < CAR_LENGTH + safetyDist) && (abs(s1.state[2] - s2.state[2]) < CAR_WIDTH + safetyDist)
 
 
 type LowLevelCarFrameL0 <: CarFrame
@@ -64,8 +64,9 @@ end
 Base.hash(is::CarLocalIS, h::UInt64=zero(UInt64)) = hash(is.physicalState, hash(is.model, h))
 Base.copy(is::CarLocalIS) = CarLocalIS(is.physicalState, is.model)
 
-collision(s1::CarPhysicalState, is2::CarLocalIS) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.model.frame.carLength)/2) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.model.frame.carWidth)/2)
-collision(is1::CarLocalIS, is2::CarLocalIS) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.model.frame.carLength + is2.model.frame.carLength)/2) && (abs(is1.physicalState.state[2] - is2.physicalState.state[2]) < (is1.model.frame.carWidth + is2.model.frame.carWidth)/2)
+collision(s1::CarPhysicalState, is2::CarLocalIS, safetyDist::Float64=0.0) = (abs(s1.state[1] - is2.physicalState.state[1]) < (CAR_LENGTH + is2.model.frame.carLength)/2 + safetyDist) && (abs(s1.state[2] - is2.physicalState.state[2]) < (CAR_WIDTH + is2.model.frame.carWidth)/2 + safetyDist)
+collision(is1::CarLocalIS, is2::CarLocalIS, safetyDist::Float64=0.0) = (abs(is1.physicalState.state[1] - is2.physicalState.state[1]) < (is1.model.frame.carLength + is2.model.frame.carLength)/2 + safetyDist) && (abs(is1.physicalState.state[2] - is2.physicalState.state[2]) < (is1.model.frame.carWidth + is2.model.frame.carWidth)/2 + safetyDist)
+
 
 #ddot_x is determined by IDM, Only for dot_y
 function createFSM()

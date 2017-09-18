@@ -6,6 +6,7 @@ VEL_STD_DEV = 2.5
 #Car dimensions
 CAR_LENGTH = 6.0
 CAR_WIDTH = 2.5
+COLLISION_CUSHION = 0.0
 
 LONG_ACCLN = 2.0
 LAT_VEL = 2.0
@@ -27,3 +28,6 @@ ul_HORIZON = ll_HORIZON * 7
 ul_TIME_STEP = 4.0
 
 ul_n_agents = 60
+
+#Simulation parameters
+sim_TIME_STEP = 0.1

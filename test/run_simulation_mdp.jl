@@ -1,7 +1,7 @@
-numSims = 10
-#=for n in 40:20:160
+numSims = 100
+for n in 40:20:160
 
-  open("../scratch/FlatSimulationSubintentional.txt", "a") do f
+  open("../scratch/FlatSimulationSubintentional_new.txt", "a") do f
     println("*************************************NumAgents = $n*************************************")
     write(f, "*************************************NumAgents = $n*************************************\n")
     avg_distance_to_goal = 0.0
@@ -63,8 +63,10 @@ numSims = 10
     avg_time_to_goal /= numSuccess
     successRate = 1.0*numSuccess/numSims
     avg_distance_from_lane_center /= numSims
+    tot_hard_brake_rate = avg_hard_braking_rate + avg_induced_hard_brake_rate
     avg_hard_braking_rate /= numSims
     avg_induced_hard_brake_rate /= numSims
+    tot_hard_brake_rate /= numSims
     avg_planning_time /= numSims
     avg_collision_rate /= numSims
 
@@ -74,6 +76,9 @@ numSims = 10
     println("Average distance from lane center = $avg_distance_from_lane_center")
     println("Average hard braking rate = $avg_hard_braking_rate")
     println("Average induced hard braking rate = $avg_induced_hard_brake_rate")
+    println("Total hard braking rate = $tot_hard_brake_rate\n")
+    println("Average planning time = $avg_planning_time\n")
+    println("Average collision rate = $avg_collision_rate\n")
 
     write(f,"Average distance to goal = $avg_distance_to_goal\n")
     write(f,"Average time to goal = $avg_time_to_goal\n")
@@ -81,14 +86,15 @@ numSims = 10
     write(f,"Average distance from lane center = $avg_distance_from_lane_center\n")
     write(f,"Average hard braking rate = $avg_hard_braking_rate\n")
     write(f,"Average induced hard braking rate = $avg_induced_hard_brake_rate\n")
+    write(f,"Total hard braking rate = $tot_hard_brake_rate\n")
     write(f,"Average planning time = $avg_planning_time\n")
     write(f,"Average collision rate = $avg_collision_rate\n")
   end
 end
-=#
 
 
-for n in 100:20:160
+
+#=for n in 100:20:160
   open("../scratch/FlatSimulationMCTSDPW.txt", "a") do f
     println("*************************************NumAgents = $n*************************************")
     write(f, "*************************************NumAgents = $n*************************************\n")
@@ -160,8 +166,10 @@ for n in 100:20:160
     avg_time_to_goal /= numSuccess
     successRate = 1.0*numSuccess/numSims
     avg_distance_from_lane_center /= numSims
+    tot_hard_brake_rate = avg_hard_braking_rate + avg_induced_hard_brake_rate
     avg_hard_braking_rate /= numSims
     avg_induced_hard_brake_rate /= numSims
+    tot_hard_brake_rate /= numSims
     avg_planning_time /= numSims
     avg_collision_rate /= numSims
 
@@ -171,6 +179,9 @@ for n in 100:20:160
     println("Average distance from lane center = $avg_distance_from_lane_center")
     println("Average hard braking rate = $avg_hard_braking_rate")
     println("Average induced hard braking rate = $avg_induced_hard_brake_rate")
+    println("Total hard braking rate = $tot_hard_brake_rate\n")
+    println("Average planning time = $avg_planning_time\n")
+    println("Average collision rate = $avg_collision_rate\n")
 
     write(f,"Average distance to goal = $avg_distance_to_goal\n")
     write(f,"Average time to goal = $avg_time_to_goal\n")
@@ -178,8 +189,9 @@ for n in 100:20:160
     write(f,"Average distance from lane center = $avg_distance_from_lane_center\n")
     write(f,"Average hard braking rate = $avg_hard_braking_rate\n")
     write(f,"Average induced hard braking rate = $avg_induced_hard_brake_rate\n")
+    write(f,"Total hard braking rate = $tot_hard_brake_rate\n")
     write(f,"Average planning time = $avg_planning_time\n")
     write(f,"Average collision rate = $avg_collision_rate\n")
   end
 
-end
+end=#

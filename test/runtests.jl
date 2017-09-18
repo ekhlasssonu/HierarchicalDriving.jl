@@ -32,5 +32,5 @@ using Interact
 
 #include("run_single_agent_occgrid.jl")
 
-#include("run_hierarchy.jl")
-include("run_simulation_mdp.jl")
+#include("run_simulation_mdp.jl")
+include("run_hierarchy.jl")

@@ -420,18 +420,18 @@ function initial_state_distribution(p::LowLevelMDP)
     mean_y = laneCenters[ln]
 
     if ln == egoLane
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     elseif abs(ln - egoLane)%2 == 1
       #ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP/2.0, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + 0.0, 25.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, 1.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + 0.0, 4.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - 0.0, 4.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     else
       #ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - AVG_GAP, AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + AVG_GAP, 1.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
-      flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - 0.0, 25.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      ldCarDist = NTuple{3,NormalDist}((NormalDist(ego_x + 0.0, 4.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      #flCarDist = NTuple{3,NormalDist}((NormalDist(ego_x - 0.0, 4.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
     end
     push!(probDensity[ln], ldCarDist)
     #push!(probDensity[ln], flCarDist)
@@ -452,7 +452,7 @@ function rand(rng::AbstractRNG, d::CarNormalDist{LowLevelMDP})
   for ln in 1:numLanes
     for carProbDensity in d.probDensity[ln]
       rnd = rand(rng)
-      if (rnd > 0.0)
+      if (rnd > 0.4)
         intentionArray = zeros(Float64, numLanes)
         intentionArray[ln] = 0.4
         if ln-1 > 0

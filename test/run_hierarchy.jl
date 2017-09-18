@@ -1,8 +1,8 @@
 numSims = 100
 
-for n in 40:20:160
-  #=
-  open("../scratch/Hierarchical1.txt", "a") do f
+for n in 40:20:40
+
+  open("../scratch/Hierarchical1_new.txt", "a") do f
 
     println("*************************************NumAgents = $n*************************************")
     write(f, "*************************************NumAgents = $n*************************************\n")
@@ -81,8 +81,10 @@ for n in 40:20:160
     avg_time_to_goal /= numSuccess
     successRate = 1.0*numSuccess/numSims
     avg_distance_from_lane_center /= numSims
+    tot_hard_brake_rate = avg_hard_braking_rate + avg_induced_hard_brake_rate
     avg_hard_braking_rate /= numSims
     avg_induced_hard_brake_rate /= numSims
+    tot_hard_brake_rate /= numSims
     avg_planning_time /= numSims
     avg_collision_rate /= numSims
 
@@ -92,6 +94,9 @@ for n in 40:20:160
     println("Average distance from lane center = $avg_distance_from_lane_center")
     println("Average hard braking rate = $avg_hard_braking_rate")
     println("Average induced hard braking rate = $avg_induced_hard_brake_rate")
+    println("Total hard braking rate = $tot_hard_brake_rate\n")
+    println("Average planning time = $avg_planning_time\n")
+    println("Average collision rate = $avg_collision_rate\n")
 
     write(f,"Average distance to goal = $avg_distance_to_goal\n")
     write(f,"Average time to goal = $avg_time_to_goal\n")
@@ -99,13 +104,14 @@ for n in 40:20:160
     write(f,"Average distance from lane center = $avg_distance_from_lane_center\n")
     write(f,"Average hard braking rate = $avg_hard_braking_rate\n")
     write(f,"Average induced hard braking rate = $avg_induced_hard_brake_rate\n")
+    write(f,"Total hard braking rate = $tot_hard_brake_rate\n")
     write(f,"Average planning time = $avg_planning_time\n")
     write(f,"Average collision rate = $avg_collision_rate\n")
   end
-  =#
 
 
-  for cellLength in [75]
+
+  #=for cellLength in [75]
     open("../scratch/Hierarchical2_$(cellLength).txt", "a") do f
 
       println("*************************************NumAgents = $n*************************************")
@@ -196,5 +202,5 @@ for n in 40:20:160
       write(f,"Average planning time = $avg_planning_time\n")
       write(f,"Average collision rate = $avg_collision_rate\n")
     end
-  end
+  end=#
 end

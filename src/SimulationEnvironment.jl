@@ -546,7 +546,7 @@ function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::Abst
   end
   return sortNeighborhood(oa_states,p)
 end
-function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP)
+function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist::Float64=0.0)
   egoState = gblISL1.ego
   egoLane = getLaneNo(egoState, p)
   y = egoState.state[2]
@@ -659,7 +659,7 @@ function reward(p::SimulationMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
   reward = 0.0
   egoSt = s.ego
 
-  if checkForCollision(s, p)
+  if checkForCollision(s, p, COLLISION_CUSHION)
     #println("End reward")
     #println("Reward = ",p.collisionCost)
     return p.collisionCost

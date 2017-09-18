@@ -102,7 +102,7 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   # Solve LowLevelMDP to get elementary action
   low_level_solver = DPWSolver(depth=low_level_mdp.HORIZON,
                  exploration_constant=10.0,
-                 n_iterations=1_500,
+                 n_iterations=1_000,
                  k_action=10.0,
                  alpha_action=1/10,
                  k_state=5.0,

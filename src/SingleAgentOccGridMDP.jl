@@ -18,54 +18,36 @@ end
 
 @auto_hash_equals immutable ImmGridOccSt
     egoGrid::AgentGridLocation
-    ld_distance::UInt64 #Discretized distance of the leading vehicle, leading vehicle in [egoCell + ld_distance * cellLength, egoCell + (ld_distance + 1) cellLength)] max 3
+    ld_distance::UInt64 #Discretized distance of the leading vehicle, leading vehicle in [egoCell + ld_distance * cell_length, egoCell + (ld_distance + 1) cell_length)] max 3
     occ_l::Vector{Bool}
     occ_r::Vector{Bool}
 end
 
 immutable SingleAgentOccGridMDP <: POMDPs.MDP{ImmGridOccSt, Int}
-  num_ld_nbr_blocks::Int64  #How many leading cells' occupancy to consider
-  num_adj_nbr_blocks::Int64 #How many adjacent cells' occupancy to consider
-
   n_agents::Int64           #Needed for transition probability
   #Same as SingleAgentGridMDP
   roadSegment::RoadSegment
-  cellLength::Float64
+  cell_length::Float64
+  nbr_cell_length::Float64
   n_v_cells::Int64
+
+  num_ld_nbr_blocks::Int64  #How many leading cells' occupancy to consider
+  num_adj_nbr_blocks::Int64 #How many adjacent cells' occupancy to consider
+
   goal::Vector{AgentGridLocation}
   goal_reward::Float64
+
   egoTranProb::Array{Float64, 6}
   ego_r_s_a::Array{Float64, 4}
   discount::Float64
 end
 
-function SingleAgentOccGridMDP(n_ld_nbr::Int64, n_adj_nbr::Int64, n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goal_reward::Float64, tranFileName::String, rwdFileName::String)
+function SingleAgentOccGridMDP(n_agents::Int64, roadSegment::RoadSegment, cell_length::Float64, nbr_cell_length::Float64, n_ld_nbr::Int64, n_adj_nbr::Int64, goal_reward::Float64, tranFileName::String, rwdFileName::String)
   tranProb = load(tranFileName, "tranProb")
   r_s_a= load(rwdFileName,  "r_s_a")
-  cellLength = length(roadSegment)/n_v_cells
-  return SingleAgentOccGridMDP(n_ld_nbr, n_adj_nbr, n_agents, roadSegment, cellLength, n_v_cells,
-                                [AgentGridLocation(n_lanes(roadSegment), n_v_cells),
-                                  AgentGridLocation(n_lanes(roadSegment), n_v_cells-1),
-                                  AgentGridLocation(n_lanes(roadSegment), n_v_cells-2)],
-                                  goal_reward, tranProb, r_s_a, 0.9)
-end
-
-function SingleAgentOccGridMDP(n_ld_nbr::Int64, n_adj_nbr::Int64, n_agents::Int64, roadSegment::RoadSegment, n_v_cells::Int64, goalCells::Array{AgentGridLocation}, goal_reward::Float64, tranFileName::String, rwdFileName::String)
-  tranProb = load(tranFileName, "tranProb")
-  r_s_a= load(rwdFileName,  "r_s_a")
-  cellLength = length(roadSegment)/n_v_cells
-  return SingleAgentOccGridMDP(n_ld_nbr, n_adj_nbr, n_agents, roadSegment, n_v_cells, goalCells,
-                                  goal_reward, tranProb, r_s_a, 0.9)
-end
-
-function SingleAgentOccGridMDP(n_ld_nbr::Int64, n_adj_nbr::Int64, n_agents::Int64, roadSegment::RoadSegment, cellLength::Float64, goal_reward::Float64, tranFileName::String, rwdFileName::String)
-  tranProb = load(tranFileName, "tranProb")
-  r_s_a= load(rwdFileName,  "r_s_a")
-  n_v_cells = convert(Int64,ceil(length(roadSegment)/cellLength))
-  goalCells = [AgentGridLocation(n_lanes(roadSegment), n_v_cells),
-                AgentGridLocation(n_lanes(roadSegment), n_v_cells-1),
-                AgentGridLocation(n_lanes(roadSegment), n_v_cells-2)]
-  return SingleAgentOccGridMDP(n_ld_nbr, n_adj_nbr, n_agents, roadSegment, cellLength, n_v_cells, goalCells,
+  n_v_cells = convert(Int64,ceil(length(roadSegment)/cell_length))
+  goalCells = [AgentGridLocation(n_lanes(roadSegment), n_v_cells), AgentGridLocation(n_lanes(roadSegment), n_v_cells-1), AgentGridLocation(n_lanes(roadSegment), n_v_cells-2), AgentGridLocation(n_lanes(roadSegment), n_v_cells-3), AgentGridLocation(n_lanes(roadSegment), n_v_cells-4)]
+  return SingleAgentOccGridMDP(n_agents, roadSegment, cell_length, nbr_cell_length, n_v_cells, n_ld_nbr, n_adj_nbr, goalCells,
                                   goal_reward, tranProb, r_s_a, 0.9)
 end
 
@@ -79,10 +61,10 @@ function states(p::SingleAgentOccGridMDP)
   states = Vector{ImmGridOccSt}()
   for l in 1:n_lanes(p)
     for d in 1:n_v_cells(p)
-      for ldCell in 0:p.num_ld_nbr_blocks
+      for ld_dist in 1:p.num_ld_nbr_blocks + 1
         for occLt in 1:2^p.num_adj_nbr_blocks
           for occRt in 1:2^p.num_adj_nbr_blocks
-            st = ImmGridOccSt(AgentGridLocation(l,d), ldCell, int2BoolArray(occLt, p.num_adj_nbr_blocks), int2BoolArray(occRt, p.num_adj_nbr_blocks))
+            st = ImmGridOccSt(AgentGridLocation(l,d), ld_dist, int2BoolArray(occLt, p.num_adj_nbr_blocks), int2BoolArray(occRt, p.num_adj_nbr_blocks))
             push!(states, st)
           end
         end
@@ -92,6 +74,10 @@ function states(p::SingleAgentOccGridMDP)
   st = ImmGridOccSt(AgentGridLocation(n_lanes(p) + 1, n_v_cells(p)+1), 1, int2BoolArray(1, p.num_adj_nbr_blocks), int2BoolArray(1, p.num_adj_nbr_blocks))
   push!(states, st)
   return states
+end
+
+function get_terminal_state(p::SingleAgentOccGridMDP)
+  return ImmGridOccSt(AgentGridLocation(n_lanes(p) + 1, n_v_cells(p)+1), 1, int2BoolArray(1, p.num_adj_nbr_blocks), int2BoolArray(1, p.num_adj_nbr_blocks))
 end
 
 function state_index(p::SingleAgentOccGridMDP, s::ImmGridOccSt)
@@ -104,13 +90,14 @@ function state_index(p::SingleAgentOccGridMDP, s::ImmGridOccSt)
     ltOcc = boolArray2Int(s.occ_l)
     rtOcc = boolArray2Int(s.occ_r)
 
-    return rtOcc + 2^p.num_adj_nbr_blocks * ((ltOcc-1) + 2^p.num_adj_nbr_blocks * (ld_distance + (p.num_ld_nbr_blocks+1) * ((egoDist - 1) + n_v_cells(p) * (egoLane - 1))))
+    return rtOcc + 2^p.num_adj_nbr_blocks * ((ltOcc-1) + 2^p.num_adj_nbr_blocks * ((ld_distance - 1) + (p.num_ld_nbr_blocks+1) * ((egoDist - 1) + n_v_cells(p) * (egoLane - 1))))
   end
 end
 
+#Get x bounds of a cell given the distance
 function get_x_bounds(p::SingleAgentOccGridMDP, dist::Int64)
-  cellLength = p.cellLength
-  return (dist-1)*cellLength + p.roadSegment.x_boundary[1], dist * cellLength + p.roadSegment.x_boundary[1]
+  cell_length = p.cell_length
+  return (dist-1)*cell_length + p.roadSegment.x_boundary[1], dist * cell_length + p.roadSegment.x_boundary[1]
 end
 
 actions(p::SingleAgentOccGridMDP) = -1:1
@@ -144,13 +131,14 @@ function iterator(d::SAOccGridDist)
 
   for next_ego in next_ego_locations
     if next_ego.distance < 1 || next_ego.distance > n_v_cells(d.p) || next_ego.lane > n_lanes(d.p) || next_ego.lane < 1
+      #Terminal State
       st = ImmGridOccSt(AgentGridLocation(n_lanes(p) + 1, n_v_cells(p)+1), 1, int2BoolArray(1, p.num_adj_nbr_blocks), int2BoolArray(1, p.num_adj_nbr_blocks))
       next_states = union(next_states, [st])
     else
-      for ldCell in 0:p.num_ld_nbr_blocks
+      for ld_dist in 1:p.num_ld_nbr_blocks+1
         for occLt in 1:2^p.num_adj_nbr_blocks
           for occRt in 1:2^p.num_adj_nbr_blocks
-            st = ImmGridOccSt(next_ego, ldCell, int2BoolArray(occLt, p.num_adj_nbr_blocks), int2BoolArray(occRt, p.num_adj_nbr_blocks))
+            st = ImmGridOccSt(next_ego, ld_dist, int2BoolArray(occLt, p.num_adj_nbr_blocks), int2BoolArray(occRt, p.num_adj_nbr_blocks))
             push!(next_states, st)
           end
         end
@@ -169,15 +157,16 @@ function rand(rng::AbstractRNG, d::SAOccGridDist)
   egoLane = s.egoGrid.lane
   egoDist = s.egoGrid.distance
   ld_dist = s.ld_distance
-  if ld_dist > size(d.p.egoTranProb)[2]-1
-    ld_dist = size(d.p.egoTranProb)[2]-1
+  if ld_dist > size(d.p.egoTranProb)[2]
+    ld_dist = size(d.p.egoTranProb)[2]
   end
   occ_l = s.occ_l
   occ_r = s.occ_r
   occ_l_int = boolArray2Int(occ_l)
   occ_r_int = boolArray2Int(occ_r)
   n_agents = p.n_agents
-  n_cells = n_v_cells(p) * n_lanes(p)
+
+  n_cells = convert(Int64,ceil(length(p.roadSegment)/p.nbr_cell_length)) * n_lanes(p)
 
   pr_cell_occupied = n_agents/n_cells #Assuming a random distribution of cars, not accurate but will do
   pr_cell_occupied > 1.0 ? pr_cell_occupied = 1.0 : nothing
@@ -188,7 +177,7 @@ function rand(rng::AbstractRNG, d::SAOccGridDist)
   found = false
   for d_ln in -1:1
     for d_dist in 0:size(d.p.egoTranProb)[6]-1
-      sum += p.egoTranProb[action_index(p,a), ld_dist+1, occ_l_int, occ_r_int, d_ln+2, d_dist+1]
+      sum += p.egoTranProb[action_index(p,a), ld_dist, occ_l_int, occ_r_int, d_ln+2, d_dist+1]
       if sum > rnd
         nxtEgoLocation = AgentGridLocation(clamp(egoLane + d_ln, 0, numLanes), egoDist+d_dist)
         found = true
@@ -196,6 +185,10 @@ function rand(rng::AbstractRNG, d::SAOccGridDist)
       end
     end
     found && break
+  end
+
+  if nxtEgoLocation.distance > n_v_cells(p)
+    return get_terminal_state(p)
   end
 
   #Leading Vehicle Distance
@@ -206,13 +199,13 @@ function rand(rng::AbstractRNG, d::SAOccGridDist)
   end
   push!(ld_car_occ_prob, (1-pr_cell_occupied)^p.num_ld_nbr_blocks)
 
-  ld_car_dist_prob = cumsum(ld_car_occ_prob)
+  cum_ld_car_occ_prob = cumsum(ld_car_occ_prob)
 
-  next_ld_distance = 0
+  next_ld_distance = 1
   r_ldcr = rand(rng)
-  for x in 1:length(ld_car_dist_prob)
-    if r_ldcr < ld_car_dist_prob[x]
-      next_ld_distance = x - 1
+  for x in 1:length(cum_ld_car_occ_prob)
+    if r_ldcr < cum_ld_car_occ_prob[x]
+      next_ld_distance = x
       break
     end
   end
@@ -256,22 +249,17 @@ function pdf(d::SAOccGridDist, s_fin::ImmGridOccSt)
   s_init = d.s
 
   if s_init.ld_distance < 0
+    #Should never happen
     println("[pdf] Error: ld_dist < 0")
     return 0.0
   end
-
-  n_agents = p.n_agents
-  n_cells = n_v_cells(p) * n_lanes(p)
-
-  pr_cell_occupied = n_agents/n_cells #Assuming a random distribution of cars, not accurate but will do
-  pr_cell_occupied > 1.0 ? pr_cell_occupied = 1.0 : nothing
 
   init_ego = s_init.egoGrid
   fin_ego  = s_fin.egoGrid
 
   ld_dist = s_init.ld_distance
-  if ld_dist > size(p.egoTranProb)[2]-1
-    ld_dist = size(p.egoTranProb)[2]-1
+  if ld_dist > size(p.egoTranProb)[2]
+    ld_dist = size(p.egoTranProb)[2]
   end
   occ_l_int = boolArray2Int(s_init.occ_l)
   occ_r_int = boolArray2Int(s_init.occ_r)
@@ -285,15 +273,23 @@ function pdf(d::SAOccGridDist, s_fin::ImmGridOccSt)
     return 0.0
   else
     # Change this maybe
-    probEgoPos += p.egoTranProb[action_index(p,a), ld_dist+1, occ_l_int, occ_r_int, d_ln+2, d_dist+1]
+    probEgoPos += p.egoTranProb[action_index(p,a), ld_dist, occ_l_int, occ_r_int, d_ln+2, d_dist+1]
     if init_ego.lane == 1 && d_ln == 0
-      probEgoPos += p.egoTranProb[action_index(p,a), ld_dist+1, occ_l_int, occ_r_int, -1+2, d_dist+1]
+      #d_ln = -1 = d_ln = 0
+      probEgoPos += p.egoTranProb[action_index(p,a), ld_dist, occ_l_int, occ_r_int, -1+2, d_dist+1]
     elseif init_ego.lane == n_lanes(p) && d_ln == 0
-      probEgoPos += p.egoTranProb[action_index(p,a), ld_dist+1, occ_l_int, occ_r_int, 1+2, d_dist+1]
+      #d_ln = +1 = d_ln = 0
+      probEgoPos += p.egoTranProb[action_index(p,a), ld_dist, occ_l_int, occ_r_int, 1+2, d_dist+1]
     end
   end
 
   #Prob. of occupancy
+  n_agents = p.n_agents
+  n_cells = convert(Int64,ceil(length(p.roadSegment)/p.nbr_cell_length)) * n_lanes(p)
+
+  pr_cell_occupied = n_agents/n_cells #Assuming a random distribution of cars, not accurate but will do
+  pr_cell_occupied > 1.0 ? pr_cell_occupied = 1.0 : nothing
+
   probOcc = 1.0
   ld_dist = s_fin.ld_distance
   if ld_dist < 0
@@ -311,7 +307,7 @@ function pdf(d::SAOccGridDist, s_fin::ImmGridOccSt)
   end
   push!(ld_car_occ_prob, (1-pr_cell_occupied)^p.num_ld_nbr_blocks)
 
-  probOcc *= ld_car_occ_prob[ld_dist+1]
+  probOcc *= ld_car_occ_prob[ld_dist]
 
   for i in occ_l
     i ? probOcc *= pr_cell_occupied : probOcc *= (1-pr_cell_occupied)
@@ -324,28 +320,29 @@ function pdf(d::SAOccGridDist, s_fin::ImmGridOccSt)
 end
 
 function initial_state(p::SingleAgentOccGridMDP, rng::AbstractRNG)
-  init_egoGrid = AgentGridLocation(1, 5)
+  egoState = CarPhysicalState((0.0, LANE_WIDTH/2.0, AVG_HWY_VELOCITY))
+  init_egoGrid = getCarGridLocation(p, egoState)
 
   n_agents = p.n_agents
-  n_cells = n_v_cells(p) * n_lanes(p)
+  n_cells = convert(Int64,ceil(length(p.roadSegment)/p.nbr_cell_length)) * n_lanes(p)
 
   pr_cell_occupied = n_agents/n_cells #Assuming a random distribution of cars, not accurate but will do
   pr_cell_occupied > 1.0 ? pr_cell_occupied = 1.0 : nothing
 
-  #Each cell may be occupied with a probability of pr_cell_occupied, including ego cell
+  #Each cell may be occupied with a probability of pr_cell_occupied
   ld_car_occ_prob = [pr_cell_occupied]
   for j in 1:p.num_ld_nbr_blocks-1
     push!(ld_car_occ_prob,pr_cell_occupied * (1-pr_cell_occupied)^j)
   end
   push!(ld_car_occ_prob, (1-pr_cell_occupied)^p.num_ld_nbr_blocks)
 
-  ld_car_dist_prob = cumsum(ld_car_occ_prob)
+  cum_ld_car_occ_prob = cumsum(ld_car_occ_prob)
 
-  next_ld_distance = 0
+  next_ld_distance = 1
   r_ldcr = rand(rng)
-  for x in 1:length(ld_car_dist_prob)
-    if r_ldcr < ld_car_dist_prob[x]
-      next_ld_distance = x - 1
+  for x in 1:length(cum_ld_car_occ_prob)
+    if r_ldcr < cum_ld_car_occ_prob[x]
+      next_ld_distance = x
       break
     end
   end
@@ -382,9 +379,10 @@ function initial_state(p::SingleAgentOccGridMDP, rng::AbstractRNG)
   return ImmGridOccSt(init_egoGrid, next_ld_distance, int2BoolArray(lt_occ_int, p.num_adj_nbr_blocks), int2BoolArray(rt_occ_int, p.num_adj_nbr_blocks))
 end
 
+#TODO: Fine-tune this part to get improvement if improvement at all possible
 function reward(p::SingleAgentOccGridMDP, s::ImmGridOccSt, a::Int, sp::ImmGridOccSt)
   rwd = 0.0
-  rwd += 1.0 * p.ego_r_s_a[a+2, s.ld_distance+1, boolArray2Int(s.occ_l), boolArray2Int(s.occ_r)]
+  rwd += 1.0 * p.ego_r_s_a[a+2, s.ld_distance, boolArray2Int(s.occ_l), boolArray2Int(s.occ_r)]
   egoGrid = s.egoGrid
   for finGrid in p.goal
     if egoGrid == finGrid
@@ -400,27 +398,38 @@ function getCarGridLocation(p::SingleAgentOccGridMDP, phySt::CarPhysicalState)
   x = phySt.state[1]
   y = phySt.state[2]
   lane = getLaneNo(y, p.roadSegment)
-  cellLength = length(p.roadSegment)/p.n_v_cells
+  cell_length = p.cell_length
   x_offset = x - p.roadSegment.x_boundary[1]
-  distance = round(Int64, ceil(x_offset/cellLength))
+  distance = round(Int64, ceil(x_offset/cell_length))
   return AgentGridLocation(lane, distance)
 end
 
 function extractImmGridOccSt(p::SingleAgentOccGridMDP, gblSt::GlobalStateL1)
   egoState = gblSt.ego
   egoGridLoc = getCarGridLocation(p, egoState)
+
+  if egoGridLoc.distance > n_v_cells(p)
+    return get_terminal_state(p)
+  end
+
   egoLane = egoGridLoc.lane
+  ego_x = egoState.state[1]
 
   ld_dist = 0
   occ_l = falses(p.num_adj_nbr_blocks)
   occ_r = falses(p.num_adj_nbr_blocks)
 
+  #Index of the car right next to ego car for any given adj nbrhd length
+  #For example, if number of adjacent cars considered were 7, the car adjacent to ego vehicle is 1,
+  #the order is 6,4,2,1,3,5,7. The index of adjacent car is 4.
+  #May be an overkill
   adj_idx = convert(Int64, floor(p.num_adj_nbr_blocks/2))+1
 
   numLanes = n_lanes(p)
 
   l_nbrs_idx = [0,0]
   r_nbrs_idx = [0,0]
+
   if egoLane-1 > 0
     r_nbrs_idx = binary_search(gblSt.neighborhood[egoLane-1], egoState)
   end
@@ -433,67 +442,52 @@ function extractImmGridOccSt(p::SingleAgentOccGridMDP, gblSt::GlobalStateL1)
     ld_idx = r_nbrs_idx[1]
     while ld_idx > 0
       ld_state = gblSt.neighborhood[egoLane-1][ld_idx].physicalState
-      ld_gridLoc = getCarGridLocation(p, ld_state)
-      ld_dist = ld_gridLoc.distance
-      ego_dist = egoGridLoc.distance
-
-      ld_offset = ld_dist - ego_dist
+      ld_x = ld_state.state[1]
+      x_offset = ld_x - ego_x
+      ld_offset = convert(Int64, ceil(x_offset/p.nbr_cell_length))
       if (ld_offset > ceil((p.num_adj_nbr_blocks-1)/2))
         break
       end
       occ_r[adj_idx - ld_offset] = true
-
       ld_idx -= 1
     end
-
     fl_idx = r_nbrs_idx[2]
     while fl_idx <= length(gblSt.neighborhood[egoLane-1])
       fl_state = gblSt.neighborhood[egoLane-1][fl_idx].physicalState
-      fl_gridLoc = getCarGridLocation(p, fl_state)
-      fl_dist = fl_gridLoc.distance
-      ego_dist = egoGridLoc.distance
-
-      fl_offset = ego_dist - fl_dist
+      fl_x = fl_state.state[1]
+      x_offset = ego_x - fl_x
+      fl_offset = convert(Int64, ceil(x_offset/p.nbr_cell_length))
       if (fl_offset > floor((p.num_adj_nbr_blocks-1)/2))
         break
       end
       occ_r[adj_idx + fl_offset] = true
-
       fl_idx += 1
     end
-
   end
 
   if l_nbrs_idx != [0,0]
     ld_idx = l_nbrs_idx[1]
     while ld_idx > 0
       ld_state = gblSt.neighborhood[egoLane+1][ld_idx].physicalState
-      ld_gridLoc = getCarGridLocation(p, ld_state)
-      ld_dist = ld_gridLoc.distance
-      ego_dist = egoGridLoc.distance
-
-      ld_offset = ld_dist - ego_dist
+      ld_x = ld_state.state[1]
+      x_offset = ld_x - ego_x
+      ld_offset = convert(Int64, ceil(x_offset/p.nbr_cell_length))
       if (ld_offset > ceil((p.num_adj_nbr_blocks-1)/2))
         break
       end
       occ_l[adj_idx - ld_offset] = true
-
       ld_idx -= 1
     end
-
     fl_idx = l_nbrs_idx[2]
     while fl_idx <= length(gblSt.neighborhood[egoLane+1])
       fl_state = gblSt.neighborhood[egoLane+1][fl_idx].physicalState
-      fl_gridLoc = getCarGridLocation(p, fl_state)
-      fl_dist = fl_gridLoc.distance
-      ego_dist = egoGridLoc.distance
-
-      fl_offset = ego_dist - fl_dist
+      fl_x = fl_state.state[1]
+      x_offset = ego_x - fl_x
+      fl_offset = convert(Int64, ceil(x_offset/p.nbr_cell_length))
       if (fl_offset > floor((p.num_adj_nbr_blocks-1)/2))
         break
       end
       occ_l[adj_idx + fl_offset] = true
-
       fl_idx += 1
     end
   end
@@ -501,34 +495,34 @@ function extractImmGridOccSt(p::SingleAgentOccGridMDP, gblSt::GlobalStateL1)
   ln = egoLane
   nbr_indices = binary_search(gblSt.neighborhood[ln], egoState)
   if nbr_indices[1] < 1
-    ld_dist = size(p.egoTranProb)[2]-1
+    ld_dist = size(p.egoTranProb)[2]
   else
     ldrSt = gblSt.neighborhood[ln][nbr_indices[1]].physicalState
-    ldrGridLoc = getCarGridLocation(p, ldrSt)
-    ld_dist = ldrGridLoc.distance - egoGridLoc.distance
-    if ld_dist > size(p.egoTranProb)[2]-1
-      ld_dist = size(p.egoTranProb)[2]-1
+    ldr_x = ldrSt.state[1]
+    ego_x = egoState.state[1]
+    ld_dist = convert(Int64, ceil((ldr_x - ego_x)/p.nbr_cell_length))
+    if ld_dist > p.num_ld_nbr_blocks + 1
+      ld_dist = p.num_ld_nbr_blocks + 1
     end
   end
-
   return ImmGridOccSt(egoGridLoc, ld_dist, occ_l, occ_r)
 end
 
 function normalize_egoTranProb(p::SingleAgentOccGridMDP)
   tDimensions = size(p.egoTranProb)
   for a in -1:1
-    for ldDist in 0:tDimensions[2]-1
+    for ldDist in 1:tDimensions[2]
       for lt_occ_int in 1:tDimensions[3]
         for rt_occ_int in 1:tDimensions[4]
           sum = 0.0
           for d_ln in -1:1
             for d_dist in 0:tDimensions[6]-1
-              sum += p.egoTranProb[a+2, ldDist+1, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1]
+              sum += p.egoTranProb[a+2, ldDist, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1]
             end
           end
           for d_ln in -1:1
             for d_dist in 0:tDimensions[6]-1
-              p.egoTranProb[a+2, ldDist+1, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1] /= sum
+              p.egoTranProb[a+2, ldDist, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1] /= sum
             end
           end
         end
@@ -541,13 +535,13 @@ function checkProb(p::SingleAgentOccGridMDP)
   sum = 0.0
   tDimensions = size(p.egoTranProb)
   for a in -1:1
-    for ldDist in 0:tDimensions[2]-1
-      for lt_occ_int in 1:8
-        for rt_occ_int in 1:8
+    for ldDist in 1:tDimensions[2]
+      for lt_occ_int in 1:tDimensions[3]
+        for rt_occ_int in 1:tDimensions[4]
           sum = 0.0
           for d_ln in -1:1
             for d_dist in 0:tDimensions[6]-1
-              sum += p.egoTranProb[a+2, ldDist+1, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1]
+              sum += p.egoTranProb[a+2, ldDist, lt_occ_int, rt_occ_int, d_ln+2, d_dist+1]
             end
           end
           if abs(1.0-sum) > 0.00000001

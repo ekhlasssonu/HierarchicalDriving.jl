@@ -74,7 +74,7 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   vel_lb = sim_mdp.egoTargetState[1].state[3]
   vel_ub = sim_mdp.egoTargetState[2].state[3]
 
-  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
+  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
                                 (CarPhysicalState((target_x_lb, target_y - 0.5, vel_lb)),
                                  CarPhysicalState((sim_mdp.roadSegment.x_boundary[2], target_y + 0.5, vel_ub))),
                                 ll_goalReward, ll_collisionCost, y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
@@ -102,7 +102,7 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   # Solve LowLevelMDP to get elementary action
   low_level_solver = DPWSolver(depth=low_level_mdp.HORIZON,
                  exploration_constant=10.0,
-                 n_iterations=1_000,
+                 n_iterations=1_500,
                  k_action=10.0,
                  alpha_action=1/10,
                  k_state=5.0,
@@ -184,17 +184,19 @@ function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   targetLane = clamp(egoLane + macro_action, 0, numLanes)
   target_y = getLaneCenter(sim_mdp.roadSegment, targetLane)
 
-  target_distance = upper_level_state.egoGrid.distance + 2
+  target_distance = upper_level_state.egoGrid.distance + 1
   if target_distance > upper_level_mdp.n_v_cells
     target_distance = upper_level_mdp.n_v_cells
   end
-  dummy, target_x_ub =  get_x_bounds(upper_level_mdp, target_distance)
-  dummy, target_x_lb =  get_x_bounds(upper_level_mdp, upper_level_state.egoGrid.distance)
+  #dummy, target_x_ub =  get_x_bounds(upper_level_mdp, target_distance)
+  #dummy, target_x_lb =  get_x_bounds(upper_level_mdp, upper_level_state.egoGrid.distance)
+  target_x_lb, target_x_ub =  get_x_bounds(upper_level_mdp, target_distance)
+
 
   vel_lb = sim_mdp.egoTargetState[1].state[3]
   vel_ub = sim_mdp.egoTargetState[2].state[3]
 
-  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
+  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
                                 (CarPhysicalState((target_x_lb, target_y - 0.5, vel_lb)),
                                  CarPhysicalState((sim_mdp.roadSegment.x_boundary[2], target_y + 0.5, vel_ub))),
                                 ll_goalReward, ll_collisionCost, y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())

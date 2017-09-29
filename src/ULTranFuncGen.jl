@@ -2,24 +2,27 @@
 type SingleAgentOccGridMDP_TGenerator #Bad name
   road_segment::RoadSegment
   cell_length::Float64
+  nbr_cell_length::Float64
   frameList::Array{LowLevelCarFrameL0,1}
 end
 
-SingleAgentOccGridMDP_TGenerator(road_segment::RoadSegment, cell_length::Float64) = SingleAgentOccGridMDP_TGenerator(road_segment, cell_length, getFrameList())
+SingleAgentOccGridMDP_TGenerator(road_segment::RoadSegment, cell_length::Float64, nbr_cell_length::Float64) = SingleAgentOccGridMDP_TGenerator(road_segment, cell_length, nbr_cell_length, getFrameList())
 
 function getCarGridLocation(gen::SingleAgentOccGridMDP_TGenerator, phySt::CarPhysicalState)
   x = phySt.state[1]
   y = phySt.state[2]
   lane = getLaneNo(y, gen.road_segment)
-  x_offset = x - gen.road_segment.x_boundary[1]
-  distance = Int64(ceil(x_offset/gen.cell_length))
+  x_adjusted = x - gen.road_segment.x_boundary[1]
+  distance = Int64(ceil(x_adjusted/gen.cell_length))
   return AgentGridLocation(lane, distance)
 end
 
 function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulInitState::ImmGridOccSt, a::Int64, rng::AbstractRNG)
   rs = gen.road_segment
   lb_x = rs.x_boundary[1]
+  ub_x = rs.x_boundary[2]
   cell_length = gen.cell_length
+  nbr_cell_length = gen.nbr_cell_length
   numLanes = n_lanes(rs)
   egoGrid = ulInitState.egoGrid
   egoLane = egoGrid.lane
@@ -37,12 +40,12 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
   fin_y_ub = fin_y + 0.5
 
   fin_x_lb = lb_x + egoDist * cell_length
-  fin_x_ub = lb_x + (egoDist + 3) * cell_length
+  fin_x_ub = ub_x
 
   finSt_lb = CarPhysicalState((fin_x_lb, fin_y_lb, AVG_HWY_VELOCITY - 5.0))
   finSt_ub = CarPhysicalState((fin_x_ub, fin_y_ub, AVG_HWY_VELOCITY + 5.0))
 
-  llMDP = LowLevelMDP(ll_discount, ll_TIME_STEP, ll_HORIZON, rs, initSt, (finSt_lb, finSt_ub),
+  llMDP = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, ll_HORIZON, rs, initSt, (finSt_lb, finSt_ub),
                           ll_goalReward, ll_collisionCost, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
 
   #Generate initial global state for llMDP
@@ -52,10 +55,14 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
     neighborhood[i] = Array{CarLocalIS,1}()
   end
 
-  #leader
-  ldr_x = init_x + 2*CAR_LENGTH + (ulInitState.ld_distance + rand(rng)) * cell_length #lb_x + (1.0 * ldr_grid.distance - 1 + rand(rng)) * cell_length
+  #leader in the same lane.
+  ldr_dist = 0*CAR_LENGTH + (ulInitState.ld_distance - 1 + rand(rng)) * nbr_cell_length
+  if ldr_dist < 1.8 * CAR_LENGTH
+    ldr_dist = min(ldr_dist + 1.8 * CAR_LENGTH, nbr_cell_length)
+  end
+  ldr_x = init_x + ldr_dist
   ldr_y = getLaneCenter(rs, egoLane)
-  ldrProbDist = NTuple{3,NormalDist}((NormalDist(ldr_x, 0.1), NormalDist(ldr_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+  ldrProbDist = NTuple{3,NormalDist}((NormalDist(ldr_x, 0.01), NormalDist(ldr_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
   intentionArray = zeros(Float64, numLanes)
   egoLane - 1 > 0 ? intentionArray[egoLane-1] += 0.3 : intentionArray[egoLane] += 0.3
   intentionArray[egoLane] += 0.4
@@ -68,11 +75,11 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
     occ_rt = ulInitState.occ_r
     adj_idx = convert(Int64, floor(length(occ_rt)/2))+1
     for i in 1:length(occ_rt)
-      i_distance = egoDist + (-1)^(i) * convert(Int64, floor(i/2))
+      i_distance_offset = (-1)^(i) * convert(Int64, floor(i/2))
       i_idx = adj_idx - (-1)^(i) * convert(Int64, floor(i/2))
       if occ_rt[i_idx]
         i_lane = egoLane-1
-        i_x = lb_x + ((i_distance - 1) + rand(rng)) * cell_length
+        i_x = init_x - nbr_cell_length/2.0 + (i_distance_offset + rand(rng)) * nbr_cell_length
         i_y = getLaneCenter(rs, i_lane)
         i_ProbDist = NTuple{3,NormalDist}((NormalDist(i_x, 0.1), NormalDist(i_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
 
@@ -91,11 +98,11 @@ function initialize_LowLevelMDP_gblSt(gen::SingleAgentOccGridMDP_TGenerator, ulI
     occ_lt = ulInitState.occ_l
     adj_idx = convert(Int64, floor(length(occ_lt)/2))+1
     for i in 1:length(occ_lt)
-      i_distance = egoDist + (-1)^(i) * convert(Int64, floor(i/2))
+      i_distance_offset = (-1)^(i) * convert(Int64, floor(i/2))
       i_idx = adj_idx - (-1)^(i) * convert(Int64, floor(i/2))
       if occ_lt[i_idx]
         i_lane = egoLane+1
-        i_x = lb_x + ((i_distance - 1) + rand(rng)) * cell_length
+        i_x = init_x - nbr_cell_length/2.0 + (i_distance_offset + rand(rng)) * nbr_cell_length
         i_y = getLaneCenter(rs, i_lane)
         i_ProbDist = NTuple{3,NormalDist}((NormalDist(i_x, 0.1), NormalDist(i_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
 

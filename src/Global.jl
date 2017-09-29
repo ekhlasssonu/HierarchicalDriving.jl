@@ -97,7 +97,7 @@ function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::Abstr
   y += (dy + dy * randn(rng) * noise[2]) # y += \doty * dt + noise
 
   dxdot = xddot * dt
-  xdot += dxdot + dxdot * randn(rng) * noise[3] #\dotx += \ddotx * dt + noise
+  xdot += (dxdot + dxdot * randn(rng) * noise[3]) #\dotx += \ddotx * dt + noise
   if xdot < 0.0
     xdot = 0.0
   end #Car doesn't move in reverse direction

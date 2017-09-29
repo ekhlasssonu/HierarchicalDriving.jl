@@ -30,7 +30,7 @@ for i in 1:N
 end
 println("value iteration: $(rsum/N)")
 
-save("../scratch/SingleAgentGridPolicy.jld", "policy", policy)
+save("../scratch/SingleAgentGrid/SingleAgentGridPolicy.jld", "policy", policy)
 
 #println(states(p))
 

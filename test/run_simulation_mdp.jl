@@ -16,6 +16,7 @@ for n in 40:20:160
     p = SimulationMDP(n)
 
     for i in 1:numSims
+      println("\tSimulation no.: $i")
       rng = MersenneTwister(i*29+1)
       policy = subintentional_simulation_policy(p, rng)
       hr = HistoryRecorder(max_steps = 150, rng = rng)

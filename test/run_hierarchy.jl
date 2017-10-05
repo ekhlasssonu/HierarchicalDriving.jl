@@ -1,6 +1,6 @@
 numSims = 100
 
-for n in 40:20:40
+for n in 40:20:160
   startTime = now()
 
   open("../scratch/Hierarchical1/Hierarchical1_runs.txt", "a") do f
@@ -113,7 +113,7 @@ for n in 40:20:40
 
 
 
-  cell_length = 75.0
+  #=cell_length = 75.0
   nbr_cell_length = 25.0
   open("../scratch/Hierarchical2/Hierarchical2_$(convert(Int64,cell_length))_$(convert(Int64,nbr_cell_length))_runs.txt", "a") do f
 
@@ -211,5 +211,5 @@ for n in 40:20:40
     write(f,"Total hard braking rate = $tot_hard_brake_rate\n")
     write(f,"Average planning time = $avg_planning_time\n")
     write(f,"Average collision rate = $avg_collision_rate\n")
-  end
+  end=#
 end

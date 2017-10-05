@@ -1,17 +1,5 @@
 #include("Agent.jl")
 
-#Noise parameters
-OBS_NOISE_X = 0.1
-OBS_NOISE_Y = 0.3
-OBS_NOISE_XDOT = 1.0
-
-TRN_NOISE_X = 0.0
-TRN_NOISE_Y = 0.0
-TRN_NOISE_XDOT = 0.1
-
-#POMDP parameters
-TIME_STEP = 0.5
-
 #Sampling initial state distributions
 #Origin (x -> start location of ego vehicle), (y -> dividing line), (\dot(x) -> 25 mps)
 #A neighboring vehicle can be absent (too far away) with probability 0.25
@@ -77,7 +65,7 @@ function getLaneNo(phySt::CarPhysicalState, laneCenters::Array{Float64,1})
   return length(laneCenters)
 end
 
-function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0.0,0.0,0.0)))
+function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::AbstractRNG, noise::NTuple{3, Float64}=NTuple{3, Float64}((0.0,0.0,0.0)), target_y::Float64 = -1000.0)
   # If car is absent or car velocity is negative or actions is terminal
   #=if(s.absent || s.state[3] < 0.0) || (a.ddot_x == Inf) || (a.ddot_x == -Inf) || (a.dot_y == Inf) || (a.dot_y == -Inf)
     return s
@@ -94,7 +82,16 @@ function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::Abstr
   x += (dx + dx * randn(rng) * noise[1]) # x += \dotx * dt + 0.5 \ddotx dt^2 + noise, noise is proportionate to absolute displacement
 
   dy = ydot * dt
-  y += (dy + dy * randn(rng) * noise[2]) # y += \doty * dt + noise
+  y_prime = y + (dy + dy * randn(rng) * noise[2]) # y += \doty * dt + noise
+  if target_y > 0.0
+    if y == target_y
+      y_prime = target_y
+    end
+    if y_prime != target_y && (y - target_y)/(y_prime - target_y) < 0.0
+      y_prime = target_y
+    end
+  end
+  y = y_prime
 
   dxdot = xddot * dt
   xdot += (dxdot + dxdot * randn(rng) * noise[3]) #\dotx += \ddotx * dt + noise

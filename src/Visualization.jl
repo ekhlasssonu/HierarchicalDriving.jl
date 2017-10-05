@@ -51,7 +51,7 @@ function show(io::IO, mime::MIME"image/png", s::GlobalStateL1)
 end
 
 function convert(::Type{Scene}, s::GlobalStateL1)
-    scene = Scene()
+    scene = Scene(200)
     es = s.ego.state
     push!(scene, Vehicle(VehicleState(VecSE2(es[1], es[2], 0.0), es[3]),
                          VehicleDef(), 0))

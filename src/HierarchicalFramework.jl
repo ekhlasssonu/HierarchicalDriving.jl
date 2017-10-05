@@ -56,10 +56,10 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   macro_action_idx = hp1.macro_action_idx
   macro_action = upper_level_policy.action_map[macro_action_idx]
 
-  y_dev_cost = -2.0
-  if macro_action != 0
-    y_dev_cost = 0.0
-  end
+  y_dev_cost = ll_y_dev_cost
+  #if macro_action != 0
+  #  y_dev_cost = 0.0
+  #end
   #print("macro_action: $macro_action \t")
 
   # Define low_level_mdp with goal and time step
@@ -74,14 +74,14 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   vel_lb = sim_mdp.egoTargetState[1].state[3]
   vel_ub = sim_mdp.egoTargetState[2].state[3]
 
-  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
+  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ll_HORIZON, sim_mdp.roadSegment, egoState,
                                 (CarPhysicalState((target_x_lb, target_y - 0.5, vel_lb)),
                                  CarPhysicalState((sim_mdp.roadSegment.x_boundary[2], target_y + 0.5, vel_ub))),
                                 ll_goalReward, ll_collisionCost, y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
 
 
   if checkForCollision(low_level_gbl_st, low_level_mdp)
-    println("Collision Occured!!!")
+    #println("Collision Occured!!!")
     low_level_gbl_st.terminal = 1
     gblSt.terminal = 1
     return 0
@@ -102,7 +102,7 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   # Solve LowLevelMDP to get elementary action
   low_level_solver = DPWSolver(depth=low_level_mdp.HORIZON,
                  exploration_constant=10.0,
-                 n_iterations=1_500,
+                 n_iterations=2_500,
                  k_action=10.0,
                  alpha_action=1/10,
                  k_state=5.0,
@@ -173,10 +173,10 @@ function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   #printGlobalPhyState(low_level_gbl_st, sim_mdp.roadSegment)
   #println("Macro action:", macro_action)
 
-  y_dev_cost = -2.0
-  if macro_action != 0
-    y_dev_cost = 0.0
-  end
+  y_dev_cost = ll_y_dev_cost
+  #if macro_action != 0
+  #  y_dev_cost = 0.0
+  #end
 
   # Define low_level_mdp with goal and time step
   egoLane = upper_level_state.egoGrid.lane
@@ -196,13 +196,13 @@ function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   vel_lb = sim_mdp.egoTargetState[1].state[3]
   vel_ub = sim_mdp.egoTargetState[2].state[3]
 
-  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, ll_HORIZON, sim_mdp.roadSegment, egoState,
+  low_level_mdp = LowLevelMDP(ll_discount, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ll_HORIZON, sim_mdp.roadSegment, egoState,
                                 (CarPhysicalState((target_x_lb, target_y - 0.5, vel_lb)),
                                  CarPhysicalState((sim_mdp.roadSegment.x_boundary[2], target_y + 0.5, vel_ub))),
                                 ll_goalReward, ll_collisionCost, y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList())
 
   if checkForCollision(low_level_gbl_st, low_level_mdp)
-    println("Collision Occured!!!")
+    #println("Collision Occured!!!")
     low_level_gbl_st.terminal = 1
     gblSt.terminal = 1
     return 0
@@ -220,7 +220,7 @@ function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   # Solve LowLevelMDP to get elementary action
   low_level_solver = DPWSolver(depth=low_level_mdp.HORIZON,
                  exploration_constant=10.0,
-                 n_iterations=1_500,
+                 n_iterations=2_500,
                  k_action=10.0,
                  alpha_action=1/10,
                  k_state=5.0,

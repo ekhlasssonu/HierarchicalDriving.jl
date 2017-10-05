@@ -1,6 +1,8 @@
 type SimulationMDP <: DiscreteActionDrivingMDP
   discount_factor::Float64
   TIME_STEP::Float64
+  SIM_TIME_STEP::Float64
+  COLLISION_CUSHION::Float64
   HORIZON::Int64
   n_agents::Int64
   roadSegment::RoadSegment
@@ -15,18 +17,18 @@ type SimulationMDP <: DiscreteActionDrivingMDP
   frameList::Array{LowLevelCarFrameL0,1}
 end
 
-SimulationMDP() = SimulationMDP(0.99, ll_TIME_STEP, ul_HORIZON, ul_n_agents,
+SimulationMDP() = SimulationMDP(0.99, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ul_HORIZON, ul_n_agents,
                         road_segment,
                         CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 5.0)),
-                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 5.0))),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.75, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.75, AVG_HWY_VELOCITY + 5.0))),
                         ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
 
-SimulationMDP(n_agents::Int64) = SimulationMDP(0.99, ll_TIME_STEP, ul_HORIZON, n_agents,
+SimulationMDP(n_agents::Int64) = SimulationMDP(0.99, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ul_HORIZON, n_agents,
                         road_segment,
                         CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 5.0)),
-                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 5.0))),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.75, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.75, AVG_HWY_VELOCITY + 5.0))),
                         ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
 
 
@@ -83,9 +85,13 @@ end
 function printGlobalPhyState(s::GlobalStateL1, rSeg::RoadSegment)
   egoState = s.ego
   egoLane = getLaneNo(egoState.state[2], rSeg)
+  last_y = egoState.state[1]
+  for ln in 1:length(s.neighborhood)
+    last_y = min(last_y, s.neighborhood[ln][end].physicalState.state[1])
+  end
   for ln in 1:length(s.neighborhood)
     print("Lane No.: $ln ")
-    colNo = convert(Int64, rSeg.x_boundary[1])
+    colNo = convert(Int64, floor(min(last_y, rSeg.x_boundary[1])))
     carNo = length(s.neighborhood[ln])
     egoPrinted = false
     for carNo in length(s.neighborhood[ln]):-1:1
@@ -360,7 +366,6 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
         imm_neighbor[ln][2] = egoState
       end
     end
-
   end
   return SVector{2, CarPhysicalState}[SVector{2}(v) for v in imm_neighbor]
 end
@@ -391,7 +396,6 @@ function calcLowLevelGblSt(gblSt::GlobalStateL1, p::SimulationMDP)
   return GlobalStateL1(egoState, imm_neighbor)
 end
 
-
 #Code to propagate
 function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
   numLanes = n_lanes(p)
@@ -406,6 +410,7 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   fsm = carFrame.policy
 
   imm_neighbors = getImmediateNeighbors(gblSt, p, carPhySt)
+  #imm_neighbors = calcImmediateNeighbors(gblSt, p, carPhySt)
   # Accln:
   ldrPhySt = imm_neighbors[carLane][1]
   x = carPhySt.state[1]
@@ -525,26 +530,29 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
 
   targetLane == 0 ? updatedNode = fsm.nodeSet[1] : nothing
   updatedModel = ParamCarModelL0(targetLane, carFrame, updatedNode)  #Reflects targetLane = 0 here.
-  return CarLocalIS(updatedCarPhySt, updatedModel)
+  return CarLocalIS(updatedCarPhySt, updatedModel), CarAction(ddot_x, ydot)
 end
 
 
 function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
-  #println("updateOtherCarsStates")
-
   numLanes = n_lanes(p)
   oa_states = Array{Array{CarLocalIS,1},1}(numLanes)
+  oa_actions = Array{Array{CarAction,1},1}(numLanes)
   for ln in 1:numLanes
     #println("\t Lane: $ln")
-    oa_states[ln] = Array{CarLocalIS,1}()
+    numCars = length(gblSt.neighborhood[ln])
+    oa_states[ln] = Array{CarLocalIS,1}(numCars)
+    oa_actions[ln] = Array{CarAction,1}(numCars)
     i = 0
     for carIS in gblSt.neighborhood[ln]
       i += 1
       #println("\t\t Car#: $i")
-      push!(oa_states[ln], updateCarIS(carIS, gblSt, p, rng))
+      next_carIS, car_act = updateCarIS(carIS, gblSt, p, rng)
+      oa_states[ln][i] = next_carIS
+      oa_actions[ln][i] = car_act
     end
   end
-  return sortNeighborhood(oa_states,p)
+  return oa_states, oa_actions
 end
 function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist::Float64=0.0)
   egoState = gblISL1.ego
@@ -561,8 +569,107 @@ function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist:
       continue
     end
     for carIS in imm_neighbors[egoLane + ln]
-      if collision(egoState, carIS)
+      if collision(egoState, carIS, safetyDist)
+        if safetyDist == 0.0
+          print("u..")
+        end
         return true
+      end
+    end
+  end
+  return false
+end
+
+#NOTE: Only call for Initial state generation
+function resolveCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist::Float64=0.0)
+  #if !checkForCollision(gblISL1, p, safetyDist)
+  #  gblISL1.terminal = 0
+  #  return gblISL1
+  #end
+  egoState = gblISL1.ego
+  egoLane = getLaneNo(egoState, p)
+  y = egoState.state[2]
+  if y > p.roadSegment.laneMarkings[end]
+    y = p.roadSegment.laneMarkings[end] - 0.5
+  elseif y < p.roadSegment.laneMarkings[1]
+    y = p.roadSegment.laneMarkings[1] + 0.5
+  end
+  imm_neighbors = getImmediateNeighbors(gblISL1, p, egoState)
+
+  numLanes = length(imm_neighbors)
+  for ln in -1:1
+    if egoLane + ln < 1 || egoLane + ln > numLanes
+      continue
+    end
+    for carPhySt in imm_neighbors[egoLane + ln]
+      if abs(egoState.state[1] - carPhySt.state[1]) < 1.5 * CAR_LENGTH #collision(egoState, carIS, safetyDist)
+        for nbr_idx in 1:length(gblISL1.neighborhood[egoLane + ln])
+          if gblISL1.neighborhood[egoLane + ln][nbr_idx].physicalState == carPhySt
+            splice!(gblISL1.neighborhood[egoLane + ln], nbr_idx)
+            break
+          end
+        end
+      end
+    end
+  end
+  gblISL1.terminal = 0
+  return gblISL1
+end
+
+function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array{Array{CarAction,1},1}, next_gblIS::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG, safety_dist::Float64=0.0)
+  curr_egoState = curr_gblIS.ego
+  curr_egoLane = getLaneNo(curr_egoState, p)
+  curr_nbrs_st = curr_gblIS.neighborhood
+  next_nbrs_st = next_gblIS.neighborhood
+
+  numLanes = n_lanes(p)
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
+
+  for ln in 1:numLanes
+    if abs(curr_egoLane - ln) > 1
+      continue
+    end
+    ld_idx, fl_idx = (binary_search(curr_nbrs_st[ln], curr_egoState)...)
+    if ld_idx < 1
+      ld_idx = 1
+    end
+
+    if fl_idx > length(curr_nbrs_st[ln])
+      fl_idx = length(curr_nbrs_st[ln])
+    end
+    #TODO: May be look at more than immediate neighbors
+    for oa_idx in ld_idx:fl_idx
+      curr_oa_st = curr_nbrs_st[ln][oa_idx].physicalState
+      next_oa_st = next_nbrs_st[ln][oa_idx].physicalState
+      oa_act = nbr_a[ln][oa_idx]
+      curr_ego_st = curr_gblIS.ego
+      next_ego_st = next_gblIS.ego
+      #TODO: easy elimination criteria
+      #if the car is far off in the same direction both in start and end state, skip
+      if abs(curr_ego_st.state[1] - curr_oa_st.state[1]) > 1.5 * CAR_LENGTH && abs(next_ego_st.state[1] - next_oa_st.state[1]) > 1.5 * CAR_LENGTH && (curr_ego_st.state[1] - curr_oa_st.state[1])/(next_ego_st.state[1] - next_oa_st.state[1]) > 0.0
+        continue
+      end
+      #if same thing on the y axis
+      if abs(curr_ego_st.state[2] - curr_oa_st.state[2]) > 1.5 * CAR_WIDTH && abs(next_ego_st.state[2] - next_oa_st.state[2]) > 1.5 * CAR_WIDTH && (curr_ego_st.state[2] - curr_oa_st.state[2])/(next_ego_st.state[2] - next_oa_st.state[2]) > 0.0
+        continue
+      end
+      time_remaining = p.TIME_STEP
+      while time_remaining > 0
+        #check collision
+        #propagate both cars
+        #NOTE: Should I worry about rng? Probably not if safety_dist is large enough
+        curr_ego_st = propagateCar(curr_ego_st, a, p.SIM_TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+        curr_oa_st = propagateCar(curr_oa_st, oa_act, p.SIM_TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+        if collision(curr_ego_st, curr_oa_st, safety_dist)
+          if safety_dist == 0.0
+            print("u.")
+            println("EgoSt = ",curr_ego_st.state," OASt = ", curr_oa_st.state)
+          end
+          return true
+        end
+
+        time_remaining -= p.SIM_TIME_STEP
       end
     end
   end
@@ -617,59 +724,52 @@ function check_induced_hardbraking(globalISL1::GlobalStateL1, p::SimulationMDP)
 end
 
 function generate_s(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
+  return first(generate_sr(p,s,a,rng))
+end
+
+
+function generate_sr(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
   if s.terminal > 0 || a < 1 || a > n_actions(p)
     #println("End generate_s")
-    return s
+    return s, 0.0
   end
 
+  reward = 0.0
+  targetLB = p.egoTargetState[1]
+  targetUB = p.egoTargetState[2]
+  init_egoSt = s.ego
   if checkForCollision(s, p)
     #println("Collision generate_s")
-    return GlobalStateL1(1, CarPhysicalState(s.ego.state), s.neighborhood, s._neighbor_cache)
+    return GlobalStateL1(1, init_egoSt, s.neighborhood, s._neighbor_cache), p.collisionCost
   end
   if checkTargetCoordinates(s,p)
-    return GlobalStateL1(2, CarPhysicalState(s.ego.state), s.neighborhood,s._neighbor_cache)
+    return GlobalStateL1(2, init_egoSt, s.neighborhood,s._neighbor_cache), p.goalReward
   end
 
   actionSet = EgoActionSpace()
   act = actionSet.actions[a]
 
   #println("EgoState = ", s.ego)
-  egoState = propagateCar(s.ego, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
-  #println("EgoStatePrime = ", egoState)
-  #println("End update egoState $egoState. Begin update neighborhood")
-  neighborhood = updateOtherCarsStates(s, p, rng)
+  next_egoSt = propagateCar(init_egoSt, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT), (targetUB.state[1] + targetLB.state[1])/2.0)
+  #println("EgoStatePrime = ", next_egoSt)
+  #println("End update next_egoSt $next_egoSt. Begin update neighborhood")
+  neighborhood, nbr_acts = updateOtherCarsStates(s, p, rng)
+  sp = GlobalStateL1(0, next_egoSt, neighborhood)
+  if checkForCollision(s, act, nbr_acts, sp, p, rng)
+    sp.terminal = 1
+    #print(":$(sp.terminal)")
+    return sp, p.collisionCost
+  elseif checkForCollision(s, act, nbr_acts, sp, p, rng, p.COLLISION_CUSHION)
+    reward += p.collisionCost/10.0
+  end
+  sortNeighborhood(sp.neighborhood,p)
   #println("End update neighborhood")
-  sp = GlobalStateL1(0, egoState, neighborhood)
   initializeNbCache(sp,p)
-  return sp
-end
-
-function reward(p::SimulationMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
-  if (s.terminal > 0 || a < 1 || a > n_actions(p))
-    #println("End reward")
-    #println("Reward = ", 0.0)
-    return 0.0
-  end
-
-  actionSet = EgoActionSpace()
-  act = actionSet.actions[a]
-
-  targetLB = p.egoTargetState[1]
-  targetUB = p.egoTargetState[2]
-  reward = 0.0
-  egoSt = s.ego
-
-  if checkForCollision(s, p, COLLISION_CUSHION)
-    #println("End reward")
-    #println("Reward = ",p.collisionCost)
-    return p.collisionCost
-  end
-
   if checkTargetCoordinates(s,p)
     reward += p.goalReward
+    sp.terminal = 2
   end
-
-  xdot = egoSt.state[3]
+  xdot = init_egoSt.state[3]
   if (targetLB.state[3] > xdot)
     reward += (abs(xdot - targetLB.state[3]) * p.velocityDeviationCost)
   elseif (xdot > targetUB.state[3])
@@ -684,20 +784,10 @@ function reward(p::SimulationMDP, s::GlobalStateL1, a::Int, rng::AbstractRNG)
     reward += p.discomfortCost
   end
 
-  currLaneCenter = getLaneCenter(egoSt, p)
-  reward += p.steeringCost * (abs(currLaneCenter - egoSt.state[2])) * p.TIME_STEP
-
-  return reward
-end
-
-function generate_sr(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::AbstractRNG)
-  #print("\rBegin generate_sor")
-  sp = generate_s(p, s, a, rng)
-
-  r = reward(p,s,a,rng)
-  #r = reward(p, s, a, sp)
-  #print("\rEnd generate_sor")
-  return sp, r
+  #Penalize for deviating from lane center
+  currLaneCenter = getLaneCenter(init_egoSt, p)
+  reward += p.steeringCost * (abs(currLaneCenter - init_egoSt.state[2])) * p.TIME_STEP
+  return sp, reward
 end
 
 function populate_lane_x_positions(x_boundary::NTuple{2,Float64}, agents_per_lane::Int64, rng::AbstractRNG)
@@ -738,7 +828,7 @@ function initial_state_distribution(p::SimulationMDP, rng::AbstractRNG)
       if (ln == egoLane) && (abs(ego_x - x_positions[carId]) < CAR_LENGTH)
         continue
       end
-      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], AVG_GAP/9.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       push!(probDensity[ln], carDist)
     end
   end
@@ -770,9 +860,54 @@ function rand(rng::AbstractRNG, d::CarNormalDist{SimulationMDP})
   return s
 end
 
+#Push back scene by dx keeping y & xdot same
+function push_state_back(p::SimulationMDP, gblSt::GlobalStateL1, dx::Float64)
+  egoSt_prime = CarPhysicalState((gblSt.ego.state[1]-dx, gblSt.ego.state[2], gblSt.ego.state[3]))
+
+  neighborhood_prime = Array{Array{CarLocalIS,1},1}(length(gblSt.neighborhood))
+  for ln in 1:length(neighborhood_prime)
+    neighborhood_prime[ln] = Array{CarLocalIS,1}(length(gblSt.neighborhood[ln]))
+    for carIdx in 1:length(neighborhood_prime[ln])
+      nbr_LocalIS = gblSt.neighborhood[ln][carIdx]
+      nbr_physt = nbr_LocalIS.physicalState
+      nbr_physt_prime = CarPhysicalState((nbr_physt.state[1]-dx, nbr_physt.state[2], nbr_physt.state[3]))
+
+      neighborhood_prime[ln][carIdx] = CarLocalIS(nbr_physt_prime, nbr_LocalIS.model)
+    end
+  end
+  gblSt_prime = (GlobalStateL1(0, egoSt_prime, neighborhood_prime))
+  initializeNbCache(gblSt_prime,p)
+  return gblSt_prime
+end
+
 function initial_state(p::SimulationMDP, rng::AbstractRNG)
   isd = initial_state_distribution(p, rng)
-  return rand(rng, isd)
+  s = rand(rng, isd)
+  push_back_dx = SCENE_GEN_BUFFER_LENGTH
+  s = push_state_back(p, s, push_back_dx)
+  ds_policy = drive_straight_policy(p, rng)
+  while true
+    egoState = s.ego
+    x = egoState.state[1]
+    x >= 0.0 && break
+    #print("~")
+    a = action(ds_policy, s)
+
+    s = generate_s(p, s, a, rng)
+    if s.terminal > 0
+      #TODO: Resolve collision here
+      #println("$(s.terminal)")
+      #printGlobalPhyState(s, p.roadSegment)
+      #print("Here's your error")
+      s = resolveCollision(s, p)
+      #printGlobalPhyState(s, p.roadSegment)
+      s.terminal = 0
+      sortNeighborhood(s.neighborhood, p)
+      initializeNbCache(s,p)
+      break
+    end
+  end
+  return s
 end
 
 type subintentional_simulation_policy <: Policy
@@ -872,11 +1007,13 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
       else
         targetLane = egoLane
       end
+    else
+      targetLane = egoLane
     end
   end
 
   if ydot < 0.0 #Reverse direction to center of current lane
-    targetLane = carLane
+    targetLane = egoLane
     ydot = -ydot  #Sign is immaterial, target_y matters
   end
   target_y = laneCenters[targetLane]
@@ -887,9 +1024,6 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
   else
     ydot = 0.0
   end
-  #updatedCarPhySt = propagateCar(egoState, CarAction(ddot_x, ydot), problem.TIME_STEP, si_policy.rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
-
-  #println("Ego Lane = $egoLane, Target Lane = $targetLane, y = $y, target y = $target_y")
 
   edgeLabel = "Undetermined"
   if egoLane == targetLane
@@ -940,4 +1074,58 @@ function action(si_policy::subintentional_simulation_policy, gblSt::GlobalStateL
 
 end
 
-#Code to gridify
+#Code to drive straight
+type drive_straight_policy <: Policy
+  idm::IDMParam
+  problem::SimulationMDP
+  rng::MersenneTwister
+end
+
+function drive_straight_policy(p::SimulationMDP, rng::AbstractRNG=MersenneTwister(706432))
+  return drive_straight_policy(createIDM_normal(), p, rng)
+end
+
+function action(ds_policy::drive_straight_policy, gblSt::GlobalStateL1)
+  problem = ds_policy.problem
+  lon = ds_policy.idm
+
+  egoState = gblSt.ego
+  egoLane = getLaneNo(egoState, problem)
+  x = egoState.state[1]
+  y = egoState.state[2]
+  xdot = egoState.state[3]
+
+  laneCenters = getLaneCenters(problem.roadSegment)
+
+  imm_neighbors = getImmediateNeighbors(gblSt, problem, egoState)
+
+  ldrPhySt = imm_neighbors[egoLane][1]
+  dxdot = xdot - ldrPhySt.state[3]
+  g = ldrPhySt.state[1] - x - CAR_LENGTH
+
+  ddot_x = get_idm_accln(lon, xdot, dxdot, g)
+  #print("ddot_x = ",ddot_x)
+
+  if ddot_x < -4.0
+    ddot_x = -6.0
+  elseif ddot_x < 0.0
+    ddot_x = -2.0
+  elseif ddot_x < 1.0
+    ddot_x = 0.0
+  else
+    ddot_x = 2.0
+  end
+
+  ydot = 0.0
+
+  egoAct = CarAction(ddot_x, ydot)
+  actIdx = 0
+  egoActions = EgoActionSpace()
+  for act in egoActions.actions
+    actIdx += 1
+    if act == egoAct
+      break
+    end
+  end
+  return actIdx
+end

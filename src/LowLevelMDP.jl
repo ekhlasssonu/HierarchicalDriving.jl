@@ -54,7 +54,7 @@ end
 
 function getLaneNo(phySt::CarPhysicalState, p::LowLevelMDP)
   y = phySt.state[2]
-  return getLaneNo(y,p)
+  return getLaneNo(y,p.roadSegment)
 end
 
 function getLaneCenter(phySt::CarPhysicalState, p::LowLevelMDP)
@@ -543,8 +543,8 @@ function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRN
   init_egoSt = s.ego
   targetLB = p.egoTargetState[1]
   targetUB = p.egoTargetState[2]
-
-  next_egoSt = propagateCar(s.ego, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
+  target_y = (targetLB.state[2]+targetUB.state[2])/2.0
+  next_egoSt = propagateCar(s.ego, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT),target_y)
   neighborhood, nbr_acts = updateNeighborState(s, p, rng)
 
   sp = GlobalStateL1(0, next_egoSt, neighborhood)

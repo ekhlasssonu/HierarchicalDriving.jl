@@ -83,7 +83,7 @@ function propagateCar(s::CarPhysicalState, a::CarAction, dt::Float64, rng::Abstr
 
   dy = ydot * dt
   y_prime = y + (dy + dy * randn(rng) * noise[2]) # y += \doty * dt + noise
-  if target_y > 0.0
+  if target_y > -1000.0
     if y == target_y
       y_prime = target_y
     end

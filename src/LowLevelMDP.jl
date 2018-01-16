@@ -81,7 +81,7 @@ end
 function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP, safety_dist::Float64=0.0)
   egoState = gblISL1.ego
   y = egoState.state[2]
-  if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+  if y >= p.roadSegment.laneMarkings[end] || y <= p.roadSegment.laneMarkings[1]
     #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
     return true
   end
@@ -100,13 +100,13 @@ end
 function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array{Array{CarAction,1},1}, next_gblIS::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG, safety_dist::Float64=0.0)
     curr_egoState = curr_gblIS.ego
     y = curr_egoState.state[2]
-    if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+    if y >= p.roadSegment.laneMarkings[end] || y <= p.roadSegment.laneMarkings[1]
       #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
       return true
     end
     next_egoState = next_gblIS.ego
     y = next_egoState.state[2]
-    if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+    if y >= p.roadSegment.laneMarkings[end] || y <= p.roadSegment.laneMarkings[1]
       #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
       return true
     end

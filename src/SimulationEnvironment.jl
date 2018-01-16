@@ -20,15 +20,15 @@ end
 SimulationMDP() = SimulationMDP(0.99, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ul_HORIZON, ul_n_agents,
                         road_segment,
                         CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.75, AVG_HWY_VELOCITY - 5.0)),
-                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.75, AVG_HWY_VELOCITY + 5.0))),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.5, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.5, AVG_HWY_VELOCITY + 5.0))),
                         ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
 
 SimulationMDP(n_agents::Int64) = SimulationMDP(0.99, ll_TIME_STEP, sim_TIME_STEP, COLLISION_CUSHION, ul_HORIZON, n_agents,
                         road_segment,
                         CarPhysicalState((0.0, 1.0 * LANE_WIDTH/2.0, AVG_HWY_VELOCITY)),
-                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 0.75, AVG_HWY_VELOCITY - 5.0)),
-                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 0.75, AVG_HWY_VELOCITY + 5.0))),
+                        (CarPhysicalState((0.0, 7.0 * LANE_WIDTH/2.0 - 1.75, AVG_HWY_VELOCITY - 5.0)),
+                         CarPhysicalState((road_segment.x_boundary[2], 7.0 * LANE_WIDTH/2.0 + 1.75, AVG_HWY_VELOCITY + 5.0))),
                         ll_goalReward*4, ll_collisionCost*4, ll_y_dev_cost, ll_hardbrakingCost, ll_discomfortCost, ll_velocityDeviationCost, getFrameList() )
 
 
@@ -251,21 +251,22 @@ function calcImmediateNeighborCache(s::GlobalStateL1, p::SimulationMDP)::NbCache
 
   while !all(finished)
     currCar = CarPhysicalState((-Inf, -1.0, AVG_HWY_VELOCITY)) #Overall furthest ahead
-	  currCar_lane = 0
-	  for ln in 1:numLanes
-	    if !finished[ln]  #If lane is not already fully processed
-        if currCar.state[1] < neighborhood[ln][lastProcessedIdx[ln]+1].physicalState.state[1]
-          currCar = neighborhood[ln][lastProcessedIdx[ln]+1].physicalState
-          currCar_lane = ln
+    currCar_lane = 0
+    for ln in 1:numLanes
+        if !finished[ln]  #If lane is not already fully processed
+            if currCar.state[1] < neighborhood[ln][lastProcessedIdx[ln]+1].physicalState.state[1]
+              currCar = neighborhood[ln][lastProcessedIdx[ln]+1].physicalState
+              currCar_lane = ln
+            end
         end
-      end
     end
 
     @assert currCar.state[2] > 0.0 #Indeed within the road segment in y
+    currCar_x = currCar.state[1]
 
-    nbhd = Array(SVector{2,CarPhysicalState}, numLanes)
+    nbhd = Array{SVector{2,CarPhysicalState}}(numLanes)
     for ln in 1:numLanes
-      nbhd_ln = Array(CarPhysicalState, 2)
+      nbhd_ln = Array{CarPhysicalState}(2)
       if lastProcessedIdx[ln] < 1
         nbhd_ln[1] = CarPhysicalState((Inf, getLaneCenter(p.roadSegment, currCar_lane), AVG_HWY_VELOCITY))
       else
@@ -292,6 +293,11 @@ function calcImmediateNeighborCache(s::GlobalStateL1, p::SimulationMDP)::NbCache
         end
       end
 
+      #If nenighbor has same x (roughly) as the curr vehicle.
+      #=if abs(nbhd_ln[1].state[1]-currCar_x) < 0.5 || abs(nbhd_ln[2].state[1]-currCar_x) < 0.5
+          nbhd_ln[1] = CarPhysicalState((currCar_x+0.5, nbhd_ln[1].state[2], nbhd_ln[1].state[3]))
+          nbhd_ln[2] = CarPhysicalState((currCar_x-0.5, nbhd_ln[2].state[2], nbhd_ln[2].state[3]))
+      end=#
       nbhd[ln] = SVector{2,CarPhysicalState}(nbhd_ln)
     end
     nb_cache[currCar] = nbhd
@@ -366,6 +372,11 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
         imm_neighbor[ln][2] = egoState
       end
     end
+    #If either neighbor has roughly same x as car x
+    #=if abs(imm_neighbor[ln][1].state[1]-car_x) < 0.5 || abs(imm_neighbor[ln][2].state[1]-car_x) < 0.5
+        imm_neighbor[ln][1] = CarPhysicalState((car_x+0.5, imm_neighbor[ln][1].state[2], imm_neighbor[ln][1].state[3]))
+        imm_neighbor[ln][2] = CarPhysicalState((car_x-0.5, imm_neighbor[ln][2].state[2], imm_neighbor[ln][2].state[3]))
+    end=#
   end
   return SVector{2, CarPhysicalState}[SVector{2}(v) for v in imm_neighbor]
 end
@@ -527,6 +538,16 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   end
   updatedCarPhySt = propagateCar(carPhySt, CarAction(ddot_x, ydot), p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
 
+  #NOTE: Change later Hack begins to remove on lane marker driving
+  updated_y = updatedCarPhySt.state[2]
+  laneMarkings = p.roadSegment.laneMarkings
+  for i in 1:length(laneMarkings)
+      if updated_y == laneMarkings[i]
+          updatedCarPhySt = CarPhysicalState((updatedCarPhySt.state[1], updated_y-0.05, updatedCarPhySt.state[3]))
+          break
+      end
+  end
+  #Hack ends
 
   targetLane == 0 ? updatedNode = fsm.nodeSet[1] : nothing
   updatedModel = ParamCarModelL0(targetLane, carFrame, updatedNode)  #Reflects targetLane = 0 here.
@@ -570,9 +591,9 @@ function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist:
     end
     for carIS in imm_neighbors[egoLane + ln]
       if collision(egoState, carIS, safetyDist)
-        if safetyDist == 0.0
-          print("u..")
-        end
+        #if safetyDist == 0.0
+        #  print("u..")
+        #end
         return true
       end
     end
@@ -662,10 +683,10 @@ function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array
         curr_ego_st = propagateCar(curr_ego_st, a, p.SIM_TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
         curr_oa_st = propagateCar(curr_oa_st, oa_act, p.SIM_TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT))
         if collision(curr_ego_st, curr_oa_st, safety_dist)
-          if safety_dist == 0.0
+          #=if safety_dist == 0.0
             print("u.")
             println("EgoSt = ",curr_ego_st.state," OASt = ", curr_oa_st.state)
-          end
+          end=#
           return true
         end
 
@@ -751,6 +772,16 @@ function generate_sr(p::SimulationMDP, s::GlobalStateL1, a::Int64, rng::Abstract
 
   #println("EgoState = ", s.ego)
   next_egoSt = propagateCar(init_egoSt, act, p.TIME_STEP, rng, (TRN_NOISE_X, TRN_NOISE_Y, TRN_NOISE_XDOT), (targetUB.state[1] + targetLB.state[1])/2.0)
+  #NOTE: Hack begins. change this later for better model of on lane mark driving
+  next_ego_y = next_egoSt.state[2]
+  laneMarkings = p.roadSegment.laneMarkings
+  for i in 1:length(laneMarkings)
+      if next_ego_y == laneMarkings[i]
+          next_egoSt = CarPhysicalState((next_egoSt.state[1], next_ego_y-0.05, next_egoSt.state[3]))
+          break
+      end
+  end
+  #Hack ends
   #println("EgoStatePrime = ", next_egoSt)
   #println("End update next_egoSt $next_egoSt. Begin update neighborhood")
   neighborhood, nbr_acts = updateOtherCarsStates(s, p, rng)

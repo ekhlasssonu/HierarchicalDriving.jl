@@ -2,7 +2,7 @@ module HierarchicalDriving
 
 # package code goes here
 import Base: ==, +, *, -, <, >, copy, Random, hash, length, rand, convert
-importall POMDPs, MCVI
+importall POMDPs
 import ParticleFilters: obs_weight
 using POMDPToolbox
 using DataFrames

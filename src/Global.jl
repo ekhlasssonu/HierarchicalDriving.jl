@@ -23,7 +23,7 @@ function sample(rng::AbstractRNG, ud::UniformDist)
 end
 
 #Given car physical state, track the nearest leading and following vehicle in each lane.
-typealias NbCache Dict{CarPhysicalState, Array{SVector{2,CarPhysicalState},1}}
+const NbCache = Dict{CarPhysicalState, Array{SVector{2,CarPhysicalState},1}}
 
 #State of world. Should work for upper level as well.
 type GlobalStateL1

@@ -30,7 +30,7 @@ ll_TIME_STEP = 0.5
 ll_HORIZON = 8
 ll_goalReward = 50.0
 ll_collisionCost = -500.0
-ll_y_dev_cost = -4.0
+ll_y_dev_cost = -10.0
 ll_hardbrakingCost = -5.0
 ll_discomfortCost = -5.0
 ll_velocityDeviationCost = -0.0
@@ -41,4 +41,4 @@ ul_TIME_STEP = 4.0
 ul_n_agents = 60
 
 #Simulation parameters
-sim_TIME_STEP = 0.1
+sim_TIME_STEP = 0.25

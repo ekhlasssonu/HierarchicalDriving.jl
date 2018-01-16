@@ -1,4 +1,4 @@
-abstract DiscreteActionDrivingMDP <: POMDPs.MDP{GlobalStateL1, Int64}
+abstract type DiscreteActionDrivingMDP <: POMDPs.MDP{GlobalStateL1, Int64} end
 type LowLevelMDP <: DiscreteActionDrivingMDP
   discount_factor::Float64
   TIME_STEP::Float64
@@ -98,6 +98,18 @@ function checkForCollision(gblISL1::GlobalStateL1, p::LowLevelMDP, safety_dist::
 end
 
 function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array{Array{CarAction,1},1}, next_gblIS::GlobalStateL1, p::LowLevelMDP, rng::AbstractRNG, safety_dist::Float64=0.0)
+    curr_egoState = curr_gblIS.ego
+    y = curr_egoState.state[2]
+    if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+      #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
+      return true
+    end
+    next_egoState = next_gblIS.ego
+    y = next_egoState.state[2]
+    if y > p.roadSegment.laneMarkings[end] || y < p.roadSegment.laneMarkings[1]
+      #println("OOB Error: y = $(gblISL1.ego.state)\t\t")
+      return true
+    end
   curr_nbrs_st = curr_gblIS.neighborhood
   next_nbrs_st = next_gblIS.neighborhood
   #For each agent check if collision happens with that agent during the transition
@@ -109,7 +121,7 @@ function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array
       curr_oa_st = curr_nbrs_st[ln][oa_idx].physicalState
       next_oa_st = next_nbrs_st[ln][oa_idx].physicalState
       oa_act = nbr_a[ln][oa_idx]
-      #TODO: easy elimination criteria
+      #Easy elimination criteria
       #if the car is far off in the same direction both in start and end state, skip
       if abs(curr_ego_st.state[1] - curr_oa_st.state[1]) > 1.5 * CAR_LENGTH && abs(next_ego_st.state[1] - next_oa_st.state[1]) > 1.5 * CAR_LENGTH && (curr_ego_st.state[1] - curr_oa_st.state[1])/(next_ego_st.state[1] - next_oa_st.state[1]) > 0.0
         continue
@@ -119,6 +131,7 @@ function checkForCollision(curr_gblIS::GlobalStateL1, a::CarAction, nbr_a::Array
         continue
       end
       time_remaining = p.TIME_STEP
+      #print("~")
       while time_remaining > 0
         #propagate both cars
         #NOTE: Should I worry about rng? Probably not if safety_dist is large enough
@@ -548,10 +561,10 @@ function generate_sr(p::LowLevelMDP, s::GlobalStateL1, a::Int64, rng::AbstractRN
   neighborhood, nbr_acts = updateNeighborState(s, p, rng)
 
   sp = GlobalStateL1(0, next_egoSt, neighborhood)
-  if checkForCollision(s, act, nbr_acts, sp, p, rng)
+  if checkForCollision(s, act, nbr_acts, sp, p, rng, p.COLLISION_CUSHION)
     return GlobalStateL1(1, next_egoSt, neighborhood), p.collisionCost
-  elseif checkForCollision(s, act, nbr_acts, sp, p, rng, p.COLLISION_CUSHION)
-    reward += p.collisionCost/5.0
+  #elseif checkForCollision(s, act, nbr_acts, sp, p, rng, p.COLLISION_CUSHION)
+    #reward += p.collisionCost/5.0
   end
   sortNeighborhood(neighborhood, p)
   #sp = GlobalStateL1(0, next_egoSt, neighborhood)

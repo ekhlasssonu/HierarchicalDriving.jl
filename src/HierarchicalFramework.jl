@@ -1,9 +1,6 @@
 using DiscreteValueIteration
-
 using JLD
-
-
-abstract HierarchicalFramework
+abstract type HierarchicalFramework end
 
 type HierarchicalFramework1 <: HierarchicalFramework
   sim_mdp::SimulationMDP
@@ -27,8 +24,14 @@ type HierarchicalPolicy1 <: Policy
   planningTime::Float64
 end
 
-HierarchicalPolicy1(hf1::HierarchicalFramework1) =  HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, MersenneTwister(982019), 0.0)
-HierarchicalPolicy1(hf1::HierarchicalFramework1, rng::AbstractRNG) =  HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, rng, 0.0)
+#HierarchicalPolicy1(hf1::HierarchicalFramework1) =  HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, MersenneTwister(982019), 0.0)
+ function HierarchicalPolicy1(hf1::HierarchicalFramework1, rng::AbstractRNG)
+     sim_mdp = hp1.hf1.sim_mdp
+     upper_level_mdp = hp1.hf1.high_mdp
+     upper_level_policy = hp1.hf1.policy
+
+     return HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, rng, 0.0)
+ end
 
 function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   #println("Step $(hp1.t)")
@@ -57,15 +60,15 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
   macro_action = upper_level_policy.action_map[macro_action_idx]
 
   y_dev_cost = ll_y_dev_cost
-  #if macro_action != 0
-  #  y_dev_cost = 0.0
-  #end
+  if macro_action != 0
+      y_dev_cost = 0.0
+  end
   #print("macro_action: $macro_action \t")
 
   # Define low_level_mdp with goal and time step
   egoLane = upper_level_state.lane
   numLanes = n_lanes(sim_mdp)
-  targetLane = clamp(egoLane + macro_action, 0, numLanes)
+  targetLane = clamp(egoLane + macro_action, 1, numLanes)
   target_y = getLaneCenter(sim_mdp.roadSegment, targetLane)
   #print("targetLane = $targetLane, target_y = $target_y \t")
   target_distance = upper_level_state.distance + 1
@@ -107,7 +110,8 @@ function action(hp1::HierarchicalPolicy1, gblSt::GlobalStateL1)
                  alpha_action=1/10,
                  k_state=5.0,
                  alpha_state=1/10,
-                 estimate_value=RolloutEstimator(subintentional_lowlevel_policy(low_level_mdp))
+                 estimate_value=RolloutEstimator(subintentional_lowlevel_policy(low_level_mdp)),
+                 rng = hp1.rng
                 )
   low_level_policy = solve(low_level_solver, low_level_mdp)
   #low_level_hr = HistoryRecorder(max_steps = low_level_mdp.HORIZON, rng = hp1.rng)
@@ -145,7 +149,7 @@ type HierarchicalPolicy2 <: Policy
   planningTime::Float64
 end
 
-HierarchicalPolicy2(hf2::HierarchicalFramework2, rng::AbstractRNG = MersenneTwister(982019)) =  HierarchicalPolicy2(hf2, Nullable{ImmGridOccSt}(), 0, 0, rng, 0.0)
+HierarchicalPolicy2(hf2::HierarchicalFramework2, rng::AbstractRNG) =  HierarchicalPolicy2(hf2, Nullable{ImmGridOccSt}(), 0, 0, rng, 0.0)
 
 function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   #println("Step $(hp1.t)")
@@ -174,9 +178,9 @@ function action(hp2::HierarchicalPolicy2, gblSt::GlobalStateL1)
   #println("Macro action:", macro_action)
 
   y_dev_cost = ll_y_dev_cost
-  #if macro_action != 0
-  #  y_dev_cost = 0.0
-  #end
+  if macro_action != 0
+    y_dev_cost = 0.0
+  end
 
   # Define low_level_mdp with goal and time step
   egoLane = upper_level_state.egoGrid.lane

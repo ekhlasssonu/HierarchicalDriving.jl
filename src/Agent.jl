@@ -1,12 +1,12 @@
-abstract Action
-abstract State
-abstract Frame
-abstract Model #Associated with a Frame and contains a belief/node of the controller
+abstract type Action end
+abstract type State end
+abstract type Frame end
+abstract type Model end #Associated with a Frame and contains a belief/node of the controller
 
-abstract LocalIS
-abstract CarState <: State
-abstract CarFrame <: Frame
-abstract CarModel <: Model
+abstract type LocalIS end
+abstract type CarState <: State end 
+abstract type CarFrame <: Frame end
+abstract type CarModel <: Model end
 
 
 

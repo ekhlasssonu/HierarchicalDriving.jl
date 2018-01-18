@@ -26,10 +26,6 @@ end
 
 #HierarchicalPolicy1(hf1::HierarchicalFramework1) =  HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, MersenneTwister(982019), 0.0)
  function HierarchicalPolicy1(hf1::HierarchicalFramework1, rng::AbstractRNG)
-     sim_mdp = hp1.hf1.sim_mdp
-     upper_level_mdp = hp1.hf1.high_mdp
-     upper_level_policy = hp1.hf1.policy
-
      return HierarchicalPolicy1(hf1, Nullable{AgentGridLocation}(), 0, 0, rng, 0.0)
  end
 

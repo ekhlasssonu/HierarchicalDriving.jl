@@ -3,7 +3,7 @@ numSims = 100
 for n in 40:20:160
   startTime = now()
 
-  open("../scratch/Hierarchical1/Hierarchical1_runs.txt", "a") do f
+  open("../scratch/Hierarchical1/Hierarchical1_runs2.txt", "a") do f
 
     println("*************************************NumAgents = $n*************************************")
     write(f, "*************************************NumAgents = $n*************************************\n")
@@ -29,16 +29,9 @@ for n in 40:20:160
       rng = MersenneTwister(i*29+1)
 
       hp1 = HierarchicalPolicy1(hf1,rng)
-      #println(hp1)
-      #s = initial_state(p, rng)
-      #printGlobalPhyState(s, p.roadSegment)
-      #printNeighborCache(s)
-      #println()
-      #a = action(hp1, s)
-      #println("action = ",a)
 
       hr = HistoryRecorder(max_steps = 150, rng = rng)
-      @time (hist = simulate(hr, p, hp1))
+      hist = simulate(hr, p, hp1)
       st_hist = state_hist(hist)
       act_hist = action_hist(hist)
       finState = st_hist[end]

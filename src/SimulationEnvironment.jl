@@ -51,7 +51,7 @@ end
 
 function getLaneNo(phySt::CarPhysicalState, p::SimulationMDP)
   y = phySt.state[2]
-  return getLaneNo(y,p)
+  return getLaneNo(y,p.roadSegment)
 end
 
 function getLaneCenter(phySt::CarPhysicalState, p::SimulationMDP)
@@ -337,7 +337,7 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
         push!(imm_neighbor[ln], CarPhysicalState((Inf, getLaneCenter(p.roadSegment, ln), AVG_HWY_VELOCITY)))
       #Lead car can be the same as the current car
       else
-        if (arr[lead_idx].physicalState == phySt)
+        if (arr[lead_idx].physicalState == phySt) #Same lane, same car, look at the leader
           lead_idx -= 1
         end
         if lead_idx < 1
@@ -363,12 +363,12 @@ function calcImmediateNeighbors(gblSt::GlobalStateL1, p::SimulationMDP, phySt::C
     end
 
     # Handle ego lane
-    if ln == egoLane
-      if (imm_neighbor[ln][1].state[1] > egoState.state[1]) && (egoState.state[1] > phySt.state[1])
+    if ln == egoLane && phySt != egoState
+      if (imm_neighbor[ln][1].state[1] > egoState.state[1]) && (egoState.state[1] >= phySt.state[1])
         imm_neighbor[ln][1] = egoState
       end
 
-      if (imm_neighbor[ln][2].state[1] < egoState.state[1]) && (egoState.state[1] < phySt.state[1])
+      if (imm_neighbor[ln][2].state[1] < egoState.state[1]) && (egoState.state[1] <= phySt.state[1])
         imm_neighbor[ln][2] = egoState
       end
     end
@@ -420,8 +420,8 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   currNode = carModel.currNode
   fsm = carFrame.policy
 
-  imm_neighbors = getImmediateNeighbors(gblSt, p, carPhySt)
-  #imm_neighbors = calcImmediateNeighbors(gblSt, p, carPhySt)
+  #imm_neighbors = getImmediateNeighbors(gblSt, p, carPhySt)
+  imm_neighbors = calcImmediateNeighbors(gblSt, p, carPhySt)
   # Accln:
   ldrPhySt = imm_neighbors[carLane][1]
   x = carPhySt.state[1]
@@ -554,7 +554,6 @@ function updateCarIS(is::CarLocalIS, gblSt::GlobalStateL1, p::SimulationMDP, rng
   return CarLocalIS(updatedCarPhySt, updatedModel), CarAction(ddot_x, ydot)
 end
 
-
 function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::AbstractRNG)
   numLanes = n_lanes(p)
   oa_states = Array{Array{CarLocalIS,1},1}(numLanes)
@@ -575,6 +574,7 @@ function updateOtherCarsStates(gblSt::GlobalStateL1, p::SimulationMDP, rng::Abst
   end
   return oa_states, oa_actions
 end
+
 function checkForCollision(gblISL1::GlobalStateL1, p::SimulationMDP, safetyDist::Float64=0.0)
   egoState = gblISL1.ego
   egoLane = getLaneNo(egoState, p)
@@ -844,6 +844,9 @@ function initial_state_distribution(p::SimulationMDP, rng::AbstractRNG)
 
   agents_per_lane = round(Int64, numAgents/numLanes)
   rs = p.roadSegment
+  x_ub = rs.x_boundary[2]
+  x_lb = rs.x_boundary[1]
+  avg_dist = (x_ub-x_lb)/agents_per_lane
   probDensity = Array{Array{NTuple{3, NormalDist},1},1}(numLanes)
   egoState = p.egoStartState
   ego_x = egoState.state[1]
@@ -859,7 +862,7 @@ function initial_state_distribution(p::SimulationMDP, rng::AbstractRNG)
       if (ln == egoLane) && (abs(ego_x - x_positions[carId]) < CAR_LENGTH)
         continue
       end
-      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], AVG_GAP/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
+      carDist = NTuple{3,NormalDist}((NormalDist(x_positions[carId], avg_dist/6.0), NormalDist(mean_y, LANE_WIDTH/6.0), NormalDist(AVG_HWY_VELOCITY, VEL_STD_DEV)))
       push!(probDensity[ln], carDist)
     end
   end

@@ -33,7 +33,7 @@ ll_collisionCost = -500.0
 ll_y_dev_cost = -10.0
 ll_hardbrakingCost = -5.0
 ll_discomfortCost = -5.0
-ll_velocityDeviationCost = -0.0
+ll_velocityDeviationCost = -2.0
 
 ul_HORIZON = ll_HORIZON * 6
 ul_TIME_STEP = 4.0

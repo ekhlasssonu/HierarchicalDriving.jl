@@ -4,4 +4,4 @@
 data/*
 scratch/*.jld
 scratch/*.txt
-
+scratch/*/*.*
